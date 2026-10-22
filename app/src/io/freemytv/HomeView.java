@@ -90,7 +90,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final long TOAST_MS = 6000, FADE_MS = 800;
     /** Blur radii of the shadow and shadowDeep paints (Shadows needs them to draw the same blur on older TVs). */
     private static final float SHADOW_BLUR = 26, DEEP_BLUR = 30;
-    private static final int SKY = 0, HERO = 1, STATUS = 2, PLATTER = 3, TILES = 4, DRAWER = 5, SHEET = 6, TOAST = 7;
+    private static final int SKY = 0, HERO = 1, STATUS = 2, PLATTER = 3, TILES = 4, DRAWER = 5, SHEET = 6, TOAST = 7, MENU = 8;
     private static final int Z_STATUS = 0, Z_HERO = 1, Z_SHELF = 2, Z_DRAWER = 3;
     private static final ExecutorService LOADER = Executors.newSingleThreadExecutor();
     // Light design (the L_ constants): title, tab bar, three recommendation cards and the shelf.
@@ -126,7 +126,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         @Override public boolean clickable(int id) { return (id - 1) / 1000 != WIDGETS; }
     });
     private final RectF a11yRect = new RectF();
-    private final Layer sky, heroLayer, status, platter, tiles, drawerLayer, sheetLayer, toastLayer;
+    private final Layer sky, heroLayer, status, platter, tiles, drawerLayer, sheetLayer, toastLayer, menuLayer;
     private int zone = Z_SHELF;
 
     // Night look (like Apple's "Automatic" appearance): darker from sunset to sunrise, with a 2 s transition.
@@ -183,7 +183,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private Spring[] tileSlide = new Spring[0];
     private final Spring moveLift = new Spring(0.3f, 0.72f, 0);
     private List<HomeApps.Item> reorderOrigin;
-    private final Runnable holdStart = () -> { if (this.okDown && this.holdArmed) startReorder(); };
+    private final Runnable holdStart = () -> { if (this.okDown && this.holdArmed) showShelfMenu(); };
 
     // Corner capsule
     private List<HomeApps.Item> statusItems = new ArrayList<>();
@@ -317,6 +317,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 case TILES: drawTiles(c); break;
                 case DRAWER: drawDrawer(c); break;
                 case SHEET: drawSheet(c); break;
+                case MENU: drawShelfMenu(c); break;
                 default: drawToast(c); break;
             }
             scene.setOffset(0, 0);
@@ -368,12 +369,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         drawerLayer = new Layer(a, DRAWER);
         sheetLayer = new Layer(a, SHEET);
         toastLayer = new Layer(a, TOAST);
+        menuLayer = new Layer(a, MENU);
         // Hardware layers on the GPU: only the one that changed is redrawn; moving, fading and scaling stay cheap.
         // Not on Android 9 to 11: on older GPUs (a Mi Box 3's Mali-450) redrawing and compositing a big layer on every
         // frame cost more than drawing straight to the screen (measured: focus on the picks 33 → 12 ms a frame, the
         // drawer 19 → 17 ms).
         for (View v : new View[] {heroLayer, status, platter, tiles, drawerLayer, sheetLayer}) v.setLayerType(Ui.LEGACY ? LAYER_TYPE_NONE : LAYER_TYPE_HARDWARE, null);
-        for (View v : new View[] {sky, heroLayer, status, platter, tiles, drawerLayer, sheetLayer, toastLayer}) {
+        for (View v : new View[] {sky, heroLayer, status, platter, tiles, drawerLayer, sheetLayer, toastLayer, menuLayer}) {
             v.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);   // TalkBack reads the items (Spoken)
             addView(v);
         }
@@ -537,6 +539,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         sheetLayer.setPivotX(width / 2f);
         sheetLayer.setPivotY(height / 2f);
         place(toastLayer, (width - toastLayer.getMeasuredWidth()) / 2, 0);
+        menuLayer.layout(0, 0, width, height);   // the shelf menu is drawn over the whole screen
     }
 
     private static void place(View v, int x, int y) {
@@ -647,6 +650,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean topMoving = step(topFocus, dt), cardsMoving = step(cardFocus, dt);
         if (topMoving) status.invalidate();
         heroMoving |= topMoving | cardsMoving | stepPatro(dt);
+        boolean menuMoving = menuAnim.step(dt);
+        if (menuMoving) menuLayer.invalidate();
+        else if (!menuOpen && menuLayer.getVisibility() == VISIBLE) menuLayer.setVisibility(INVISIBLE);
         boolean drawerItemsMoving = step(drawerFocus, dt);
         boolean gridMoving = step(gridFocus, dt) | scroll.step(dt);
         boolean drawerMoving = drawer.step(dt);
@@ -685,7 +691,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         // Busy: something is moving, or the sheet or the drawer is open.
         boolean busy = tilesMoving || statusMoving || heroMoving || drawerItemsMoving || gridMoving || drawerMoving
                 || sheetMoving || toastFading || heroFading || bgFading || nightMoving || sheetOpen || sheet.value > 0.001f
-                || drawerOpen || drawer.value > 0.001f || toast != null || !toasts.isEmpty() || revealShot != null;
+                || drawerOpen || drawer.value > 0.001f || toast != null || !toasts.isEmpty() || revealShot != null || menuMoving || menuOpen;
         if (revealShot != null) invalidate();
         idle = !busy;
         if (busy) Choreographer.getInstance().postFrameCallback(this);
@@ -2267,6 +2273,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     boolean onKey(KeyEvent e) {
         wake();
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
+        if (menuOpen) return menuKey(e, down);
         if (reordering) return reorderKey(e, down);
         int code = e.getKeyCode();
         if (down && code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER
@@ -2299,10 +2306,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                         okDown = true;
                         okHeld = false;
                         handler.removeCallbacks(holdStart);
-                        holdArmed = canReorder();
+                        holdArmed = canMenu();
                         if (holdArmed) handler.postDelayed(holdStart, HOLD_MS);
                     } else if (okDown && holdArmed && e.isLongPress()) {
-                        startReorder();
+                        showShelfMenu();
                     }
                 } else {
                     holdArmed = false;
@@ -2541,6 +2548,170 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean opened = HomeApps.open(activity, it, this, Math.round(r.left), Math.round(r.top),
                 Math.round(r.width()), Math.round(r.height()));
         if (!opened) showToast(Ui.tr("Não deu para abrir ", "Couldn't open ") + it.label + ".");
+    }
+
+    // MARK: - Hold OK on a shelf app (like Apple TV): Move, Remove from shelf, Uninstall
+
+    private boolean canMenu() {
+        if (sheetOpen || zone != Z_SHELF || shelfIndex >= shelf.size()) return false;
+        HomeApps.Item it = shelf.get(shelfIndex);
+        return it.kind == HomeApps.APP && it.pkg != null;
+    }
+
+    /** An app you installed (not part of the TV, not this one): the only kind that can be uninstalled. */
+    private boolean removable(String pkg) {
+        if (pkg.equals(getContext().getPackageName())) return false;
+        try {
+            int flags = getContext().getPackageManager().getApplicationInfo(pkg, 0).flags;
+            return (flags & (android.content.pm.ApplicationInfo.FLAG_SYSTEM | android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) == 0;
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
+
+    private void showShelfMenu() {
+        handler.removeCallbacks(holdStart);
+        holdArmed = false;
+        if (!canMenu()) return;
+        wake();
+        okHeld = true;   // letting go of OK opens nothing
+        final HomeApps.Item it = shelf.get(shelfIndex);
+        final List<String> names = new ArrayList<>();
+        final List<Runnable> actions = new ArrayList<>();
+        if (shelf.size() >= 2) {
+            names.add(Ui.tr("Mover", "Move"));
+            actions.add(this::startReorder);
+        }
+        names.add(Ui.tr("Tirar da prateleira", "Remove from shelf"));
+        actions.add(() -> removeFromShelf(it.pkg));
+        if (removable(it.pkg)) {
+            names.add(Ui.tr("Desinstalar", "Uninstall"));
+            actions.add(() -> uninstall(it));
+        }
+        click.open();
+        menuNames = names;
+        menuActions = actions;
+        menuIndex = 0;
+        menuOpen = true;
+        menuOkDown = false;
+        menuIgnoreOkUp = okDown;   // the press that opened the menu is still down: its release picks nothing
+        menuAnim.target = 1;
+        menuLayer.setVisibility(VISIBLE);
+        menuLayer.invalidate();
+    }
+
+    // The menu itself: a dark glass popover above the app, a white pill on the focused row, the rest of the screen dimmed.
+    private boolean menuOpen, menuOkDown, menuIgnoreOkUp;
+    private int menuIndex;
+    private List<String> menuNames = new ArrayList<>();
+    private List<Runnable> menuActions = new ArrayList<>();
+    private final Spring menuAnim = new Spring(0.28f, 0.85f, 0);
+    private Paint menuText;
+    private final Path menuTail = new Path();
+
+    private void closeMenu() {
+        menuOpen = false;
+        menuAnim.target = 0;
+        menuLayer.invalidate();
+    }
+
+    private boolean menuKey(KeyEvent e, boolean down) {
+        switch (e.getKeyCode()) {
+            case KeyEvent.KEYCODE_DPAD_UP:
+                if (down && menuIndex > 0) { menuIndex--; click.move(); menuLayer.invalidate(); }
+                return true;
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                if (down && menuIndex < menuNames.size() - 1) { menuIndex++; click.move(); menuLayer.invalidate(); }
+                return true;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+            case KeyEvent.KEYCODE_NUMPAD_ENTER:
+                if (down) {
+                    if (e.getRepeatCount() == 0 && !menuIgnoreOkUp) menuOkDown = true;
+                } else if (menuIgnoreOkUp) {
+                    menuIgnoreOkUp = false;
+                    okDown = okHeld = false;
+                } else if (menuOkDown) {
+                    menuOkDown = false;
+                    Runnable run = menuActions.get(menuIndex);
+                    closeMenu();
+                    run.run();
+                }
+                return true;
+            case KeyEvent.KEYCODE_BACK:
+                if (!down) closeMenu();
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    private void drawShelfMenu(Canvas c) {
+        float v = Ui.clamp(menuAnim.value);
+        if (v < 0.01f || shelfIndex >= tileRects.length || menuNames.isEmpty()) return;
+        if (menuText == null) menuText = Ui.text(Ui.medium, 27 * k, 0xFFFFFFFF);
+        RectF tile = tileRects[shelfIndex];
+        fill.setShader(null);
+        c.save();
+        c.clipOutRect(tile);   // the app stays bright
+        fill.setColor(Ui.alpha(0xFF000000, 0.4f * v));
+        c.drawRect(screen, fill);
+        c.restore();
+        int n = menuNames.size();
+        float w = 360 * k, rowH = 66 * k, pad = 12 * k, h = n * rowH + 2 * pad;
+        float x = Math.max(40 * k, Math.min(this.w - 40 * k - w, tile.centerX() - w / 2)), y = tile.top - h - 34 * k;
+        float pivotX = tile.centerX(), pivotY = y + h + 34 * k;
+        c.save();
+        float sc = 0.9f + 0.1f * v;
+        c.scale(sc, sc, pivotX, pivotY);
+        tmp.set(x, y, x + w, y + h);
+        shadow.setColor(Ui.alpha(0xFF000000, 0.45f * v));
+        shadows.draw(c, tmp, 28 * k, SHADOW_BLUR * k, shadow);
+        fill.setColor(Ui.alpha(0xFF2A2A2E, 0.96f * v));
+        c.drawRoundRect(tmp, 28 * k, 28 * k, fill);
+        menuTail.reset();
+        float tx = Math.max(x + 40 * k, Math.min(x + w - 40 * k, tile.centerX()));
+        menuTail.moveTo(tx - 16 * k, y + h - 1);
+        menuTail.lineTo(tx + 16 * k, y + h - 1);
+        menuTail.lineTo(tx, y + h + 16 * k);
+        menuTail.close();
+        c.drawPath(menuTail, fill);
+        for (int i = 0; i < n; i++) {
+            float top = y + pad + i * rowH;
+            boolean focus = i == menuIndex;
+            if (focus) {
+                tmp.set(x + 10 * k, top + 4 * k, x + w - 10 * k, top + rowH - 4 * k);
+                fill.setColor(Ui.alpha(0xFFF5F5F7, v));
+                c.drawRoundRect(tmp, 20 * k, 20 * k, fill);
+            }
+            boolean danger = menuNames.get(i).equals(Ui.tr("Desinstalar", "Uninstall"));
+            menuText.setColor(Ui.alpha(focus ? 0xFF1C1C1E : danger ? 0xFFFF6961 : 0xFFF5F5F7, v));
+            c.drawText(menuNames.get(i), x + 36 * k, top + rowH / 2 + Ui.halfCap(menuText), menuText);
+        }
+        c.restore();
+    }
+
+    private void removeFromShelf(String pkg) {
+        final Context c = getContext().getApplicationContext();
+        LOADER.execute(() -> {
+            List<String> all = new ArrayList<>(HomeApps.shelfPackages(c));
+            all.remove(pkg);
+            final List<String> save = all;
+            handler.post(() -> {
+                Prefs.setShelf(save);
+                reload();
+            });
+        });
+    }
+
+    /** The system asks to confirm (that dialog is the user's to accept); the shelf refreshes when it is back. */
+    private void uninstall(HomeApps.Item it) {
+        try {
+            activity.startActivity(new android.content.Intent(android.content.Intent.ACTION_DELETE, android.net.Uri.parse("package:" + it.pkg)));
+            handler.postDelayed(this::reload, 6000);
+        } catch (RuntimeException e) {
+            showToast(Ui.tr("Não deu para desinstalar ", "Couldn't uninstall ") + it.label + ".");
+        }
     }
 
     // MARK: - Moving apps on the shelf
