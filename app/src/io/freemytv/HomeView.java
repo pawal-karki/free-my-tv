@@ -25,6 +25,7 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.Choreographer;
 import android.view.KeyEvent;
+import android.view.PixelCopy;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityManager;
@@ -33,10 +34,13 @@ import android.view.accessibility.AccessibilityNodeProvider;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.concurrent.ExecutorService;
@@ -102,7 +106,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final String[] TABS_ES = {"Explorar", "Películas", "Series"};
     private static final String[] TABS_DE = {"Entdecken", "Filme", "Serien"};
     private static final String[] TAB_KIND = {null, "movie", "tv"};
-    private static final int Z_TOP = 4, Z_CARDS = 5;
+    private static final int Z_TOP = 4, Z_CARDS = 5, Z_PATRO = 6;
 
     private final Activity activity;
     private final Scene scene = new Scene();
@@ -139,8 +143,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private int tab, topIndex, cardIndex;
     private int widgetIndex;    // with TalkBack on, the drawer's weather (0) or quotes (1) card can take the focus
     private List<Recs.Pick> cards = new ArrayList<>();
-    private final Spring[] topFocus = new Spring[6];
-    private final RectF[] topRects = new RectF[6];
+    private final Spring[] topFocus = new Spring[8];
+    private final RectF[] topRects = new RectF[8];
     private final Spring[] cardFocus = new Spring[3];
     private final RectF[] cardRects = new RectF[3];
     private final List<HomeApps.Item> lightButtons = new ArrayList<>();
@@ -350,6 +354,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         super(a);
         activity = a;
         data = HomeData.get(a);
+        Nepse.init(a);
         recs = Recs.get(a);
         click = new Click(a);
         ui = a.getSharedPreferences("home-ui", Context.MODE_PRIVATE);
@@ -374,7 +379,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
         setContentDescription("Free My TV");
         drawerLayer.setVisibility(INVISIBLE);
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 8; i++) {
             topFocus[i] = new Spring(0.26f, 0.85f, 0);
             topRects[i] = new RectF();
         }
@@ -470,6 +475,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lightButtons.clear();
         lightButtons.add(HomeApps.action(HomeApps.LIVE_TV, "live", Ui.tr("TV aberta", "Live TV"), "live_tv"));
         lightButtons.add(HomeApps.action(HomeApps.INPUTS, "inputs", Ui.tr("Entradas HDMI", "HDMI Inputs"), "hdmi"));
+        lightButtons.add(HomeApps.action(HomeApps.WIFI, "wifi", "Wi-Fi", "wifi"));
+        lightButtons.add(HomeApps.action(HomeApps.THEME, "theme", Ui.tr("Modo escuro", "Dark mode"), "bedtime"));
         lightButtons.add(HomeApps.action(HomeApps.SETTINGS, "settings", Ui.tr("Configurações", "Settings"), "settings"));
     }
 
@@ -639,7 +646,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean heroMoving = heroFocus.step(dt);
         boolean topMoving = step(topFocus, dt), cardsMoving = step(cardFocus, dt);
         if (topMoving) status.invalidate();
-        heroMoving |= topMoving | cardsMoving;
+        heroMoving |= topMoving | cardsMoving | stepPatro(dt);
         boolean drawerItemsMoving = step(drawerFocus, dt);
         boolean gridMoving = step(gridFocus, dt) | scroll.step(dt);
         boolean drawerMoving = drawer.step(dt);
@@ -657,6 +664,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (tilesMoving || tilesDirty) tiles.invalidate();
         if (statusMoving || statusDirty || bgFading) status.invalidate();
         if (heroMoving || heroDirty || heroFading) heroLayer.invalidate();
+        weatherFxFrame(up);
+        nepseTick(up);
         if (drawerItemsMoving || drawerDirty || bgFading) drawerLayer.invalidate();
         if (gridMoving || gridDirty) sheetLayer.invalidate();
         if (drawerMoving || bgFading) sky.invalidate();
@@ -676,7 +685,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         // Busy: something is moving, or the sheet or the drawer is open.
         boolean busy = tilesMoving || statusMoving || heroMoving || drawerItemsMoving || gridMoving || drawerMoving
                 || sheetMoving || toastFading || heroFading || bgFading || nightMoving || sheetOpen || sheet.value > 0.001f
-                || drawerOpen || drawer.value > 0.001f || toast != null || !toasts.isEmpty();
+                || drawerOpen || drawer.value > 0.001f || toast != null || !toasts.isEmpty() || revealShot != null;
+        if (revealShot != null) invalidate();
         idle = !busy;
         if (busy) Choreographer.getInstance().postFrameCallback(this);
         else Choreographer.getInstance().postFrameCallbackDelayed(this, 1000);
@@ -1193,7 +1203,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         Paint text = clock ? lClockQuote : lQuote;
         // The corner buttons' names appear in this row: the quotes fade out while one of them has focus.
         float fade = 1;
-        for (int i = 3; i < 6 && !clock; i++) fade = Math.min(fade, 1 - Ui.clamp(topFocus[i].value));
+        for (int i = 3; i < 3 + lightButtons.size() && !clock; i++) fade = Math.min(fade, 1 - Ui.clamp(topFocus[i].value));
         if (fade <= 0.01f) return;
         int textColor = text.getColor();
         text.setColor(Ui.alpha(textColor, fade));
@@ -1443,7 +1453,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             x += tw + gap;
         }
         float cardsTop = CARDS_TOP * k, split = left + (right - left) * 0.585f;
-        boolean wx = Prefs.weather(), qt = Prefs.quotes() && HomeData.active().length > 0;
+        boolean wx = Prefs.weather(), qt = Prefs.nepse();
         // A card that is off gives its room to the other one.
         weatherCard.set(left, cardsTop, qt ? split - 16 * k : right, cardsTop + CARDS_H * k);
         quotesCard.set(wx ? split + 16 * k : left, cardsTop, right, cardsTop + CARDS_H * k);
@@ -1509,7 +1519,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         for (int i = 0; i < drawerItems.size(); i++) if (i != top) drawDrawerTile(c, i);
         if (top >= 0) drawDrawerTile(c, top);
         if (Prefs.weather()) drawWeatherCard(c, weatherCard);
-        if (Prefs.quotes() && HomeData.active().length > 0) drawQuotesCard(c, quotesCard);
+        if (Prefs.nepse()) drawQuotesCard(c, quotesCard);
     }
 
     /** Square drawer button: symbol and name; an input with no device is dimmed. Focused: white, with dark text. */
@@ -1549,8 +1559,258 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     /** Weather for your location: now (large), the next 6 hours, and sunrise and sunset. */
     private void drawWeatherCard(Canvas c, RectF r) {
         drawerCard(c, r);
+        if (!Ui.LEGACY) drawWeatherFx(c, r);
         if (Ui.LEGACY) weatherSnapshot.draw(c, r, drawerCardsKey(), cc -> drawWeather(cc, r));
         else drawWeather(c, r);
+    }
+
+    private Paint nxTick;
+
+    /** Under the weather line on the home screen: the NEPSE index and up to four of your watched stocks. */
+    private void drawNepseTicker(Canvas c) {
+        Nepse.Data d = Nepse.data();
+        if (d == null) return;
+        if (nxTick == null) nxTick = Ui.numbers(Ui.medium, 27 * k, L_DIM);
+        float x = MARGIN * k, y = 704 * k;
+        int up = tone(0xFF248A3D, UP_COLOR), down = tone(0xFFD70015, DOWN_COLOR);
+        nxTick.setColor(tone(L_DIM, 0xADFFFFFF));
+        String head = "NEPSE  " + String.format(java.util.Locale.US, "%,.2f", d.index) + "  ";
+        c.drawText(head, x, y, nxTick);
+        x += nxTick.measureText(head);
+        nxTick.setColor(d.change >= 0 ? up : down);
+        c.drawText((d.change >= 0 ? "▲ " : "▼ ") + String.format(java.util.Locale.US, "%.2f%%", Math.abs(d.pct)), x, y, nxTick);
+        x = MARGIN * k;
+        int shown = 0;
+        for (Nepse.Holding h : Nepse.watch()) {
+            Nepse.Quote q = Nepse.quote(h.symbol);
+            if (q == null || shown >= 4) continue;
+            nxTick.setColor(tone(L_DIM, 0xADFFFFFF));
+            String sym = (shown == 0 ? "★ " : "") + q.symbol + " ";
+            c.drawText(sym, x, y + 40 * k, nxTick);
+            x += nxTick.measureText(sym);
+            nxTick.setColor(q.pct >= 0 ? up : down);
+            String pct = String.format(java.util.Locale.US, "%+.1f%%", q.pct) + "   ";
+            c.drawText(pct, x, y + 40 * k, nxTick);
+            x += nxTick.measureText(pct);
+            shown++;
+        }
+    }
+
+    private Paint nxBig, nxRow, nxHead;
+
+    /** NEPSE: the index with its change, and the day's top three gainers and losers. */
+    private void drawNepse(Canvas c, RectF r) {
+        if (nxBig == null) {
+            nxBig = Ui.numbers(Ui.medium, 44 * k, 0xFFFFFFFF);
+            nxRow = Ui.numbers(Ui.medium, 20 * k, 0xFFFFFFFF);
+            nxHead = Ui.text(Ui.semibold, 18 * k, 0xADFFFFFF);
+        }
+        nxBig.setColor(drawerInk(1));
+        nxRow.setColor(drawerInk(0.95f));
+        nxHead.setColor(tone(L_DIM, 0xADFFFFFF));
+        float x = r.left + 34 * k, right = r.right - 34 * k;
+        if (zone == WIDGETS && widgetIndex == 1) {   // focused: a ring and the way in
+            phStrokeInit();
+            phStroke.setStrokeWidth(3 * k);
+            phStroke.setColor(tone(0xFF0A84FF, 0xFF64A8FF));
+            c.drawRoundRect(r, 30 * k, 30 * k, phStroke);
+            c.drawText(Ui.tr("OK abre", "OK to open") + " ›", right, r.bottom - 22 * k, cardDimRight);
+        }
+        c.drawText("NEPSE", x, r.top + 54 * k, cardTitle);
+        Nepse.Data d = Nepse.data();
+        if (d == null) {
+            c.drawText(Ui.tr("Carregando…", "Loading…"), x, r.top + 130 * k, cardDim);
+            return;
+        }
+        String when = Nepse.status(getContext(), d);
+        int paren = when.indexOf(" (");
+        if (paren > 0) when = when.substring(0, paren);
+        c.drawText(when.length() > 34 ? when.substring(0, 33) + "…" : when, right, r.top + 54 * k, cardDimRight);
+        int up = tone(0xFF248A3D, UP_COLOR), down = tone(0xFFD70015, DOWN_COLOR);
+        int color = d.change >= 0 ? up : down;
+        String value = String.format(java.util.Locale.US, "%,.2f", d.index);
+        c.drawText(value, x - Ui.leftBearing(nxBig, value), r.top + 136 * k, nxBig);
+        String chg = (d.change >= 0 ? "▲ " : "▼ ") + String.format(java.util.Locale.US, "%.2f  (%+.2f%%)", Math.abs(d.change), d.pct);
+        changePaint.setColor(color);
+        float cw = changePaint.measureText(chg) + 36 * k;
+        tmp.set(x, r.top + 168 * k, x + cw, r.top + 206 * k);
+        fill.setShader(null);
+        fill.setColor(Ui.alpha(color, 0.2f));
+        c.drawRoundRect(tmp, 19 * k, 19 * k, fill);
+        changePaint.setTextAlign(Paint.Align.CENTER);
+        c.drawText(chg, tmp.centerX(), tmp.centerY() + Ui.halfCap(changePaint), changePaint);
+        float col = r.left + 318 * k, colW = (right - col) / 2;
+        for (int side = 0; side < 2; side++) {
+            List<Nepse.Quote> list = side == 0 ? d.gainers : d.losers;
+            boolean mine = false;
+            if (side == 1 && !Prefs.nepseWatch().isEmpty()) {   // your watchlist takes the losers' column
+                List<Nepse.Quote> w = new java.util.ArrayList<>();
+                for (Nepse.Holding h : Nepse.watch()) {
+                    Nepse.Quote q = Nepse.quote(h.symbol);
+                    if (q != null && w.size() < 3) w.add(q);
+                }
+                if (!w.isEmpty()) {
+                    list = w;
+                    mine = true;
+                }
+            }
+            float cx = col + colW * side;
+            c.drawText(side == 0 ? Ui.tr("MAIORES ALTAS", "TOP GAINERS") : mine ? Ui.tr("MINHA LISTA", "WATCHLIST") : Ui.tr("MAIORES BAIXAS", "TOP LOSERS"), cx, r.top + 108 * k, nxHead);
+            for (int i = 0; i < list.size(); i++) {
+                Nepse.Quote q = list.get(i);
+                float base = r.top + (150 + 44 * i) * k;
+                nxRow.setTextAlign(Paint.Align.LEFT);
+                nxRow.setColor(drawerInk(0.95f));
+                c.drawText(q.symbol.length() > 7 ? q.symbol.substring(0, 7) : q.symbol, cx, base, nxRow);
+                nxRow.setTextAlign(Paint.Align.RIGHT);
+                nxRow.setColor(q.pct >= 0 ? up : down);
+                c.drawText(String.format(java.util.Locale.US, "%+.2f%%", q.pct), cx + colW - 14 * k, base, nxRow);
+            }
+            if (list.isEmpty()) c.drawText("—", cx, r.top + 150 * k, nxRow);
+        }
+        changePaint.setTextAlign(Paint.Align.CENTER);
+    }
+
+    // MARK: - Weather card animation: a turning sun, drifting clouds, rain, snow, thunder, twinkling stars
+
+    private static final float[] FX = new float[240];
+    static {
+        java.util.Random rnd = new java.util.Random(7);
+        for (int i = 0; i < FX.length; i++) FX[i] = rnd.nextFloat();
+    }
+    private Paint fxPaint;
+    private android.graphics.RadialGradient sunGlow;
+    private final Path fxClip = new Path();
+    private long fxAt;
+
+    /** True while the weather card is on screen and its animation needs frames (about 20 a second). */
+    private Nepse.Data nepseShown, nepseHome;
+    private long nepseTickAt;
+    private String nepseWatchSeen = "";
+
+    /** Once a second: keep the watchlist fresh during trading hours, and redraw the home ticker when new data came. */
+    private void nepseTick(long up) {
+        if (up - nepseTickAt < 1000) return;
+        nepseTickAt = up;
+        if (!Prefs.nepse()) return;
+        if (!Prefs.nepseWatch().isEmpty() && Nepse.tradingHours()) Nepse.refresh(5 * 60_000L);
+        String watch = Prefs.nepseWatch();
+        if (Nepse.data() != nepseHome || !watch.equals(nepseWatchSeen)) {
+            nepseWatchSeen = watch;
+            nepseHome = Nepse.data();
+            heroDirty = true;
+            drawerDirty = true;
+        }
+    }
+
+    private boolean weatherFxFrame(long up) {
+        if (drawerOpen && Prefs.nepse()) {
+            Nepse.refresh();
+            if (Nepse.data() != nepseShown) {
+                nepseShown = Nepse.data();
+                drawerDirty = true;
+            }
+        }
+        if (!(drawerOpen || drawer.value > 0.001f) || !Prefs.weather() || Double.isNaN(data.weather.temp)) return false;
+        if (up - fxAt < 50) return true;
+        fxAt = up;
+        drawerLayer.invalidate();
+        return true;
+    }
+
+    private void drawWeatherFx(Canvas c, RectF r) {
+        HomeData.Weather wx = data.weather;
+        if (Double.isNaN(wx.temp) || wx.code < 0) return;
+        if (fxPaint == null) {
+            fxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            sunGlow = new android.graphics.RadialGradient(0, 0, 150 * k, new int[] {0x66FFB300, 0x22FFB300, 0x00FFB300},
+                    new float[] {0, 0.45f, 1}, Shader.TileMode.CLAMP);
+        }
+        float t = SystemClock.uptimeMillis() / 1000f, w = r.width(), h = r.height();
+        int code = wx.code;
+        boolean rain = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
+        boolean snow = (code >= 71 && code <= 77) || code == 85 || code == 86;
+        boolean cloudy = code >= 2 && code != 0 && code != 1;
+        fxClip.reset();
+        fxClip.addRoundRect(r, 30 * k, 30 * k, Path.Direction.CW);
+        c.save();
+        c.clipPath(fxClip);
+        fxPaint.setShader(null);
+        fxPaint.setStyle(Paint.Style.FILL);
+        if (code <= 1 || code == 2) {
+            if (wx.isDay) {
+                // Sun: a breathing glow and rays that turn slowly behind the icon.
+                float cx = r.left + 63 * k, cy = r.top + 132 * k, pulse = 1 + 0.06f * (float) Math.sin(t * 1.6);
+                c.save();
+                c.translate(cx, cy);
+                c.scale(pulse, pulse);
+                fxPaint.setShader(sunGlow);
+                c.drawCircle(0, 0, 150 * k, fxPaint);
+                fxPaint.setShader(null);
+                c.restore();
+                fxPaint.setStyle(Paint.Style.STROKE);
+                fxPaint.setStrokeCap(Paint.Cap.ROUND);
+                fxPaint.setStrokeWidth(5 * k);
+                fxPaint.setColor(0x66FFB300);
+                c.save();
+                c.translate(cx, cy);
+                c.rotate(t * 10);
+                for (int i = 0; i < 14; i++) {
+                    float len = (16 + 10 * (float) Math.sin(t * 1.8 + i)) * k;
+                    c.drawLine(44 * k, 0, 44 * k + len * 0.8f, 0, fxPaint);
+                    c.rotate(360f / 14);
+                }
+                c.restore();
+                fxPaint.setStyle(Paint.Style.FILL);
+            } else {
+                for (int i = 0; i < 40; i++) {
+                    float a = 0.25f + 0.55f * (0.5f + 0.5f * (float) Math.sin(t * (1.2f + FX[3 * i + 2]) + FX[3 * i] * 20));
+                    fxPaint.setColor(Ui.alpha(tone(0xFF8E8E93, 0xFFFFFFFF), a * 0.7f));
+                    c.drawCircle(r.left + FX[3 * i] * w, r.top + FX[3 * i + 1] * h * 0.8f, (1 + 1.6f * FX[3 * i + 2]) * k, fxPaint);
+                }
+            }
+        }
+        if (cloudy || rain || snow) {
+            fxPaint.setColor(tone(0x1A5A6B80, 0x2EFFFFFF));
+            for (int i = 0; i < 3; i++) {
+                float cx = r.left + (((t * (7 + 4 * i) + FX[i] * (w + 300 * k)) % (w + 300 * k)) - 150 * k);
+                float cy = r.top + (40 + 36 * i) * k, s = (0.8f + 0.5f * FX[10 + i]) * k;
+                c.drawCircle(cx, cy, 34 * s, fxPaint);
+                c.drawCircle(cx + 38 * s, cy + 6 * s, 28 * s, fxPaint);
+                c.drawCircle(cx - 36 * s, cy + 8 * s, 26 * s, fxPaint);
+                c.drawRoundRect(cx - 60 * s, cy + 6 * s, cx + 62 * s, cy + 36 * s, 15 * s, 15 * s, fxPaint);
+            }
+        }
+        if (rain) {
+            fxPaint.setStyle(Paint.Style.STROKE);
+            fxPaint.setStrokeCap(Paint.Cap.ROUND);
+            fxPaint.setStrokeWidth(2.2f * k);
+            fxPaint.setColor(tone(0x886AA8E8, 0xAA9CC8FF));
+            int n = code >= 95 || code == 65 || code == 82 ? 70 : 46;
+            for (int i = 0; i < n; i++) {
+                float speed = 0.9f + 0.9f * FX[3 * i + 1], y = ((t * speed + FX[3 * i + 2]) % 1) * (h + 30 * k) - 20 * k;
+                float x = r.left + FX[3 * i] * (w + 40 * k) - 10 * k + y * 0.12f;
+                c.drawLine(x, r.top + y, x - 4 * k, r.top + y + (12 + 10 * FX[3 * i + 1]) * k, fxPaint);
+            }
+            fxPaint.setStyle(Paint.Style.FILL);
+        }
+        if (snow) {
+            fxPaint.setColor(tone(0xCC9DB4CC, 0xE6FFFFFF));
+            for (int i = 0; i < 46; i++) {
+                float speed = 0.12f + 0.12f * FX[3 * i + 1], y = ((t * speed + FX[3 * i + 2]) % 1) * (h + 20 * k) - 10 * k;
+                float x = r.left + FX[3 * i] * w + (float) Math.sin(t * 1.1 + FX[3 * i + 2] * 9) * 10 * k;
+                c.drawCircle(x, r.top + y, (1.8f + 2.4f * FX[3 * i + 1]) * k, fxPaint);
+            }
+        }
+        if (code >= 95) {   // thunder: a quick double flash every few seconds
+            float ph = (t % 6f);
+            float flash = ph < 0.12f ? 1 - ph / 0.12f : ph > 0.25f && ph < 0.33f ? (0.33f - ph) / 0.08f * 0.6f : 0;
+            if (flash > 0) {
+                fxPaint.setColor(Ui.alpha(0xFFFFFFFF, flash * tone(0.55f, 0.35f)));
+                c.drawRect(r, fxPaint);
+            }
+        }
+        c.restore();
     }
 
     private void drawWeather(Canvas c, RectF r) {
@@ -1627,8 +1887,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     /** Prices in the configured currency with the 24 h change (green/red, like Apple's Stocks app). */
     private void drawQuotesCard(Canvas c, RectF r) {
         drawerCard(c, r);
-        if (Ui.LEGACY) quotesSnapshot.draw(c, r, drawerCardsKey(), cc -> drawPrices(cc, r));
-        else drawPrices(c, r);
+        if (Ui.LEGACY) quotesSnapshot.draw(c, r, drawerCardsKey(), cc -> drawNepse(cc, r));
+        else drawNepse(c, r);
     }
 
     /**
@@ -1668,29 +1928,92 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private final Snapshot weatherSnapshot = new Snapshot(), quotesSnapshot = new Snapshot();
 
+    private static final int RED = 0xFFFF5A52;
+    private static final DateTimeFormatter AD = DateTimeFormatter.ofPattern("EEE, d MMM yyyy", Locale.ENGLISH);
+    private long patroDay = -1;
+    private Patro.Month patroMonth;
+    private int patroToday;
+    private final String[] patroUpcoming = new String[3];
+    private String patroHeader = "", patroSub = "", patroDate = "";
+    private Paint patroBig, patroCell, patroCellDim, patroFest;
+
+    /** The Patro card's text, built once a day. */
+    private void refreshPatro() {
+        LocalDate today = LocalDate.now();
+        if (today.toEpochDay() == patroDay) return;
+        patroDay = today.toEpochDay();
+        List<Patro.Month> all = Patro.months(getContext());
+        patroMonth = Patro.find(getContext(), today);
+        java.util.Arrays.fill(patroUpcoming, null);
+        if (patroMonth == null) return;
+        Patro.Month m = patroMonth;
+        patroToday = (int) (today.toEpochDay() - m.start.toEpochDay()) + 1;
+        patroHeader = Patro.MONTHS[m.month - 1] + " " + Patro.digits(m.year);
+        patroSub = Patro.MONTHS_EN[m.month - 1] + " " + m.year;
+        patroDate = today.format(AD);
+        int n = 0;
+        for (int mi = all.indexOf(m); mi < all.size() && n < 3; mi++) {
+            Patro.Month q = all.get(mi);
+            for (int d = mi == all.indexOf(m) ? patroToday : 1; d <= q.length && n < 3; d++) {
+                if (q.fest[d].isEmpty()) continue;
+                patroUpcoming[n++] = Patro.digits(d) + (q == m ? "" : " " + Patro.MONTHS[q.month - 1]) + "  " + q.fest[d].split(";")[0];
+            }
+        }
+    }
+
+    /** Bikram Sambat month grid with today marked, and the next festivals (Nepali patro). */
     private void drawPrices(Canvas c, RectF r) {
+        refreshPatro();
+        if (patroBig == null) {
+            patroBig = Ui.numbers(Ui.medium, 72 * k, 0xFFFFFFFF);
+            patroCell = Ui.numbers(Ui.medium, 21 * k, 0xF2FFFFFF);
+            patroCell.setTextAlign(Paint.Align.CENTER);
+            patroCellDim = Ui.text(Ui.medium, 18 * k, 0xADFFFFFF);
+            patroCellDim.setTextAlign(Paint.Align.CENTER);
+            patroFest = Ui.text(Ui.medium, 22 * k, 0xF2FFFFFF);
+        }
         float x = r.left + 34 * k, right = r.right - 34 * k;
-        refreshDrawerText();
-        c.drawText(Ui.tr("Cotações", "Crypto"), x, r.top + 54 * k, cardTitle);
-        c.drawText(staleText, right, r.top + 54 * k, cardDimRight);
-        float cap = Ui.cap(cardText);
-        int[] coins = HomeData.active();
-        for (int j = 0; j < coins.length; j++) {
-            int i = coins[j];
-            float base = r.top + (110 + 52 * j) * k, mid = base - cap / 2;
-            float gw = Glyphs.width(getContext(), HomeData.COINS[i], cap);
-            Glyphs.coin(getContext(), c, HomeData.COINS[i], x + 14 * k, mid, cap, tone(L_DIM, 0xCCFFFFFF));
-            c.drawText(HomeData.coinName(i), x + Math.max(gw, 28 * k) / 2 + 30 * k, base, cardText);
-            c.drawText(priceText[i], right - 128 * k, base, pricePaint);
-            double change = data.changes[i];
-            if (Double.isNaN(change)) continue;
-            int color = change >= 0 ? tone(0xFF248A3D, UP_COLOR) : tone(0xFFD70015, DOWN_COLOR);
-            tmp.set(right - 108 * k, mid - 17 * k, right, mid + 17 * k);
-            fill.setShader(null);
-            fill.setColor(Ui.alpha(color, 0.2f));
-            c.drawRoundRect(tmp, 17 * k, 17 * k, fill);
-            changePaint.setColor(color);
-            c.drawText(changeText[i], tmp.centerX(), mid + Ui.halfCap(changePaint), changePaint);
+        Patro.Month m = patroMonth;
+        if (m == null) {
+            c.drawText(Ui.tr("Calendário", "Patro"), x, r.top + 54 * k, cardTitle);
+            c.drawText(Ui.tr("Sem dados para esta data", "No calendar data for this date"), x, r.top + 110 * k, cardDim);
+            return;
+        }
+        patroCell.setColor(drawerInk(0.95f));
+        patroFest.setColor(drawerInk(0.95f));
+        patroBig.setColor(drawerInk(1));
+        patroCellDim.setColor(tone(L_DIM, 0xADFFFFFF));
+        c.drawText(patroHeader, x, r.top + 54 * k, cardTitle);
+        float gridW = (right - x) * 0.55f, cw = gridW / 7;
+        c.drawText(patroSub, x + gridW, r.top + 54 * k, cardDimRight);
+        for (int i = 0; i < 7; i++) {
+            patroCellDim.setColor(i == 6 ? RED : tone(L_DIM, 0xADFFFFFF));
+            c.drawText(Patro.DAYS[i], x + cw * (i + 0.5f), r.top + 92 * k, patroCellDim);
+        }
+        int col = m.start.getDayOfWeek().getValue() % 7;   // Monday 1 .. Sunday 7 -> Sunday 0
+        float rowH = 29 * k, gridTop = r.top + 100 * k;
+        for (int d = 1; d <= m.length; d++, col++) {
+            float cx = x + cw * (col % 7 + 0.5f), base = gridTop + rowH * (col / 7 + 1) - 7 * k;
+            boolean red = col % 7 == 6 || m.holiday[d];
+            if (d == patroToday) {
+                tmp.set(cx - 18 * k, base - 22 * k, cx + 18 * k, base + 7 * k);
+                fill.setShader(null);
+                fill.setColor(tone(0xFF1C1C1E, 0xF2FFFFFF));
+                c.drawRoundRect(tmp, 14 * k, 14 * k, fill);
+                patroCell.setColor(tone(0xFFFFFFFF, 0xFF1C1C1E));
+            } else {
+                patroCell.setColor(red ? RED : drawerInk(0.95f));
+            }
+            c.drawText(Patro.digits(d), cx, base, patroCell);
+        }
+        float px = x + gridW + 44 * k, pw = right - px;
+        c.drawText(Patro.digits(patroToday), px, r.top + 108 * k, patroBig);
+        c.drawText(patroDate, px, r.top + 142 * k, cardDim);
+        for (int i = 0; i < 3 && patroUpcoming[i] != null; i++) {
+            float base = r.top + (186 + 38 * i) * k;
+            String name = patroUpcoming[i];
+            int fit = patroFest.breakText(name, true, pw - 8 * k, null);
+            c.drawText(fit < name.length() ? name.substring(0, Math.max(0, fit - 1)) + "…" : name, px, base, patroFest);
         }
     }
 
@@ -1705,6 +2028,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean heroChanged = heroFocus.target != (!sheetOpen && zone == Z_HERO ? 1 : 0);
         heroFocus.target = !sheetOpen && zone == Z_HERO ? 1 : 0;
         if (snap) heroFocus.snap(heroFocus.target);
+        pFocus.target = !sheetOpen && zone == Z_PATRO ? 1 : 0;
         boolean topChanged = aim(topFocus, !sheetOpen && zone == Z_TOP ? topIndex : -1, snap);
         heroChanged |= aim(cardFocus, !sheetOpen && zone == Z_CARDS ? cardIndex : -1, snap) | topChanged;
         statusChanged |= topChanged;
@@ -2007,6 +2331,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             closeDrawer();
             retarget(false);
         } else if (zone != Z_SHELF) {
+            if (zone == Z_PATRO) patroGoToday();
             zone = Z_SHELF;
             retarget(false);
         } else {
@@ -2075,6 +2400,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                     zone = Z_DRAWER;
                 } else if (dx != 0 && at + dx >= 0 && at + dx < on.size()) {
                     widgetIndex = on.get(at + dx);
+                    drawerDirty = true;
                 } else {
                     return;
                 }
@@ -2087,8 +2413,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                     drawerIndex = next;
                 } else if (dy < 0) {
                     closeDrawer();
-                } else if (talkBack() && !widgets().isEmpty()) {
-                    // Only with TalkBack: the widgets are there to be read, and this is how it gets to them.
+                } else if (!widgets().isEmpty()) {
+                    // Down from the drawer buttons: the weather and NEPSE cards (NEPSE opens full screen).
                     zone = WIDGETS;
                     widgetIndex = widgets().get(0);
                 } else {
@@ -2141,7 +2467,19 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
         HomeApps.Item it;
         RectF r;
-        if (!sheetOpen && zone == WIDGETS) return;   // a widget is only read
+        if (!sheetOpen && zone == WIDGETS) {          // NEPSE opens full screen; the weather card is only read
+            if (widgetIndex == 1 && Prefs.nepse()) {
+                click.open();
+                activity.startActivity(new android.content.Intent(activity, NepseActivity.class));
+            }
+            return;
+        }
+        if (!sheetOpen && zone == Z_PATRO) {         // OK on the month header: back to today
+            if (patroHead) patroGoToday();
+            heroDirty = true;
+            click.move();
+            return;
+        }
         if (sheetOpen) {
             if (others.isEmpty()) return;
             it = others.get(gridIndex);
@@ -2175,6 +2513,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (shelf.isEmpty()) return;
             it = shelf.get(shelfIndex);
             r = tileRects[shelfIndex];
+        }
+        if (it.kind == HomeApps.THEME) {
+            // Toggle light/dark; back to Auto when that matches what the sun says.
+            boolean toDark = !nightTarget;
+            String theme = toDark == data.autoNight(System.currentTimeMillis()) ? "auto" : toDark ? "dark" : "light";
+            click.move();
+            switchTheme(theme, topRects[topIndex].centerX(), topRects[topIndex].centerY());
+            return;
         }
         click.open();
         if (it.kind == HomeApps.ALL_APPS) {
@@ -2487,7 +2833,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         List<Integer> out = new ArrayList<>();
         if (!drawerOpen) return out;
         if (Prefs.weather()) out.add(0);
-        if (Prefs.quotes() && HomeData.active().length > 0) out.add(1);
+        if (Prefs.nepse()) out.add(1);
         return out;
     }
 
@@ -2577,17 +2923,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         return s.toString();
     }
 
-    /** The quotes card as TalkBack reads it: each coin with its price and 24 h change. */
+    /** The NEPSE card as TalkBack reads it: the index and its change. */
     private String quotesText() {
-        StringBuilder s = new StringBuilder(Ui.tr("Cotações", "Crypto"));
-        String stale = HomeData.staleness(data.pricesAt, 5 * 60_000L);
-        s.append(", ").append(stale.isEmpty() ? Ui.tr("variação em 24 h", "24h change") : Ui.tr("de ", "", "de ") + stale).append('.');
-        for (int i : HomeData.active()) {
-            s.append(' ').append(HomeData.coinName(i)).append(' ').append(HomeData.brl(data.prices[i]));
-            if (!Double.isNaN(data.changes[i])) s.append(", ").append(HomeData.change(data.changes[i]));
-            s.append('.');
-        }
-        return s.toString();
+        Nepse.Data d = Nepse.data();
+        if (d == null) return "NEPSE";
+        return "NEPSE " + String.format(java.util.Locale.US, "%,.2f", d.index) + ", " + String.format(java.util.Locale.US, "%+.2f", d.change)
+                + " (" + String.format(java.util.Locale.US, "%+.2f", d.pct) + "%).";
     }
 
     // MARK: - Light design: title, tabs, cards and icon-only buttons
@@ -2603,7 +2944,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             x = topRects[i].right + 4 * k;
         }
         float b = L_BUTTON * k, right = CONTENT_R * k, cy = L_BUTTON_CY * k;
-        for (int i = 2; i >= 0; i--) {
+        for (int i = lightButtons.size() - 1; i >= 0; i--) {
             topRects[3 + i].set(right - b, cy - b / 2, right, cy + b / 2);
             right -= b + L_BUTTON_GAP * k;
         }
@@ -2683,7 +3024,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         applyTone();
         if (!picksOn()) {
             drawClock(c);
-            if (HomeData.coinCount() > 0) drawQuotes(c);
+            if (patroOn()) drawPatroHome(c);
+            if (Prefs.nepse()) drawNepseTicker(c);
             return;
         }
         String hello = Ui.tr("Para você", "For You");
@@ -2819,7 +3161,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
      */
     private void drawLightButtons(Canvas c) {
         applyTone();
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < lightButtons.size(); i++) {
             RectF r = topRects[3 + i];
             float f = Ui.clamp(topFocus[3 + i].value), s = 1 + 0.1f * f, rad = r.width() / 2 * s;
             cell.set(r.centerX() - rad, r.centerY() - rad, r.centerX() + rad, r.centerY() + rad);
@@ -2834,16 +3176,333 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 fill.setColor(Ui.alpha(0xFFFFFFFF, f));
                 c.drawCircle(cell.centerX(), cell.centerY(), rad, fill);
             }
-            Symbols.draw(getContext(), c, lightButtons.get(i).symbol, cell.centerX(), cell.centerY(), 27 * k * s,
-                    blend(tone(L_INK, 0xEBFFFFFF), L_INK, f));
-            if (f > 0.01f) {
-                String label = lightButtons.get(i).label;
-                float half = lTip.measureText(label) / 2;
-                float x = Math.min(r.centerX(), CONTENT_R * k - half);
-                lTip.setAlpha(Math.round(255 * f));
-                c.drawText(label, x, r.bottom + (40 + 4 * f) * k, lTip);
+            HomeApps.Item btn = lightButtons.get(i);
+            int ink = blend(tone(L_INK, 0xEBFFFFFF), L_INK, f);
+            boolean themeBtn = btn.kind == HomeApps.THEME;
+            if (btn.kind == HomeApps.WIFI) drawWifi(c, cell.centerX(), cell.centerY(), 27 * k * s, ink);
+            else Symbols.draw(getContext(), c, themeBtn ? (nightTarget ? "sunny" : "bedtime") : btn.symbol, cell.centerX(), cell.centerY(), 27 * k * s, ink);
+            // Short names under every button (brighter and larger on the focused one).
+            String label;
+            switch (btn.kind) {
+                case HomeApps.LIVE_TV: label = Ui.tr("TV aberta", "Live TV"); break;
+                case HomeApps.INPUTS: label = "HDMI"; break;
+                case HomeApps.WIFI: label = "Wi-Fi"; break;
+                case HomeApps.THEME: label = nightTarget ? Ui.tr("Claro", "Light") : Ui.tr("Escuro", "Dark"); break;
+                default: label = Ui.tr("Ajustes", "Settings"); break;
+            }
+            float oldSize = lTip.getTextSize();
+            lTip.setTextSize((19 + 4 * f) * k);
+            lTip.setAlpha(Math.round(255 * (0.55f + 0.45f * f)));
+            float half = lTip.measureText(label) / 2;
+            c.drawText(label, Math.min(r.centerX(), CONTENT_R * k - half), r.bottom + (34 + 4 * f) * k, lTip);
+            lTip.setTextSize(oldSize);
+            lTip.setAlpha(255);
+        }
+    }
+
+    // MARK: - Light/dark switch: the new look spreads from the button over a snapshot of the old one
+
+    private Bitmap revealShot;
+    private float revealX, revealY;
+    private long revealAt;
+    private static final long REVEAL_MS = 750;
+    private final Path revealPath = new Path();
+
+    private void switchTheme(String theme, float cx, float cy) {
+        if (revealShot != null || w <= 0 || h <= 0) {
+            Prefs.setTheme(theme);
+            checkNight(true);
+            return;
+        }
+        Bitmap shot = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        try {
+            PixelCopy.request(activity.getWindow(), new Rect(0, 0, w, h), shot, result -> {
+                Prefs.setTheme(theme);
+                if (result == PixelCopy.SUCCESS) {
+                    revealShot = shot;
+                    revealX = cx;
+                    revealY = cy;
+                    revealAt = SystemClock.uptimeMillis();
+                    checkNight(false);   // the real screen changes at once, under the old snapshot
+                    wake();
+                } else {
+                    checkNight(true);
+                }
+            }, handler);
+        } catch (RuntimeException e) {   // no window to copy yet
+            Prefs.setTheme(theme);
+            checkNight(true);
+        }
+    }
+
+    @Override protected void dispatchDraw(Canvas c) {
+        super.dispatchDraw(c);
+        if (revealShot == null) return;
+        float t = Ui.clamp((SystemClock.uptimeMillis() - revealAt) / (float) REVEAL_MS);
+        if (t >= 1) {
+            revealShot = null;
+            return;
+        }
+        float e = t * t * (3 - 2 * t);
+        float far = (float) Math.hypot(Math.max(revealX, w - revealX), Math.max(revealY, h - revealY));
+        float r = far * e;
+        revealPath.reset();
+        revealPath.addCircle(revealX, revealY, r, Path.Direction.CW);
+        c.save();
+        c.clipOutPath(revealPath);
+        c.drawBitmap(revealShot, 0, 0, null);
+        c.restore();
+        phStrokeInit();
+        phStroke.setStrokeWidth(3 * k);
+        phStroke.setColor(Ui.alpha(0xFFFFFFFF, 0.35f * (1 - t)));
+        c.drawCircle(revealX, revealY, r, phStroke);
+    }
+
+    /** Wi-Fi: a dot and three arcs (Material Symbols has no PNG for it here). */
+    private void drawWifi(Canvas c, float cx, float cy, float size, int color) {
+        phStrokeInit();
+        phStroke.setColor(color);
+        phStroke.setStrokeWidth(size * 0.11f);
+        phStroke.setStrokeCap(Paint.Cap.ROUND);
+        float bx = cx, by = cy + size * 0.42f;
+        for (int i = 1; i <= 3; i++) {
+            float rr = size * 0.30f * i;
+            tmp.set(bx - rr, by - rr, bx + rr, by + rr);
+            c.drawArc(tmp, 225, 90, false, phStroke);
+        }
+        phStroke.setStrokeCap(Paint.Cap.BUTT);
+        fill.setShader(null);
+        fill.setColor(color);
+        c.drawCircle(bx, by, size * 0.08f, fill);
+    }
+
+    private void phStrokeInit() {
+        if (phStroke != null) return;
+        phStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+        phStroke.setStyle(Paint.Style.STROKE);
+    }
+
+    // MARK: - Patro on the home screen (without picks): month grid, day cursor, festival list
+
+    private int patroMi, patroSel = 1, patroDir;
+    // Animation: the cursor glides between days, the grid slides in on a month change, the card lifts when focused.
+    private final Spring pcX = new Spring(0.22f, 0.8f, 0), pcY = new Spring(0.22f, 0.8f, 0),
+            pFocus = new Spring(0.3f, 0.85f, 0), pMonth = new Spring(0.35f, 1f, 1);
+    private int patroShownMi = -1;
+
+    private boolean stepPatro(float dt) {
+        return pcX.step(dt) | pcY.step(dt) | pFocus.step(dt) | pMonth.step(dt);
+    }
+
+    /** Aims the cursor at the selected day; a new month snaps it and slides the grid in from the side. */
+    private void patroAim() {
+        List<Patro.Month> all = Patro.months(getContext());
+        if (all.isEmpty()) return;
+        Patro.Month m = all.get(Math.min(patroMi, all.size() - 1));
+        int idx = m.start.getDayOfWeek().getValue() % 7 + Math.min(patroSel, m.length) - 1;
+        if (patroMi != patroShownMi) {
+            patroDir = patroShownMi < 0 || patroMi == patroShownMi ? 0 : patroMi > patroShownMi ? 1 : -1;
+            patroShownMi = patroMi;
+            pcX.snap(idx % 7);
+            pcY.snap(idx / 7);
+            pMonth.snap(0);
+            pMonth.target = 1;
+        } else {
+            pcX.target = idx % 7;
+            pcY.target = idx / 7;
+        }
+        heroDirty = true;
+    }
+
+    private boolean patroHead;
+    private Paint phTitle, phDim, phNum, phSmall, phBig, phLine, phRow, phStroke;
+
+    private boolean patroOn() {
+        if (picksOn() || !Prefs.quotes()) return false;
+        refreshPatro();
+        return patroMonth != null;
+    }
+
+    private void patroGoToday() {
+        refreshPatro();
+        List<Patro.Month> all = Patro.months(getContext());
+        patroMi = Math.max(0, all.indexOf(patroMonth));
+        patroSel = patroToday;
+        patroHead = false;
+        patroAim();
+    }
+
+    private void patroMove(int dx, int dy) {
+        List<Patro.Month> all = Patro.months(getContext());
+        if (all.isEmpty()) { zone = Z_SHELF; return; }
+        Patro.Month m = all.get(patroMi);
+        if (patroHead) {
+            if (dx != 0) {
+                int n = patroMi + dx;
+                if (n < 0 || n >= all.size()) return;
+                patroMi = n;
+                patroSel = Math.min(patroSel, all.get(n).length);
+            } else if (dy < 0) {
+                zone = Z_TOP;
+                topIndex = 3;
+            } else {
+                patroHead = false;
+            }
+        } else if (dx != 0) {
+            int d = patroSel + dx;
+            if (d < 1) {
+                if (patroMi == 0) return;
+                d = all.get(--patroMi).length;
+            } else if (d > m.length) {
+                if (patroMi == all.size() - 1) return;
+                patroMi++;
+                d = 1;
+            }
+            patroSel = d;
+        } else if (dy < 0) {
+            if (patroSel - 7 < 1) patroHead = true; else patroSel -= 7;
+        } else if (patroSel + 7 > m.length) {
+            zone = Z_SHELF;
+            if (!shelf.isEmpty()) shelfIndex = nearest(tileRects, tileRects.length, w * 0.65f);
+        } else {
+            patroSel += 7;
+        }
+        patroAim();
+    }
+
+    private void drawPatroHome(Canvas c) {
+        if (phTitle == null) {
+            phTitle = Ui.text(Ui.semibold, 42 * k, L_INK);
+            phDim = Ui.text(Ui.medium, 22 * k, L_DIM);
+            phNum = Ui.numbers(Ui.medium, 30 * k, L_INK);
+            phNum.setTextAlign(Paint.Align.CENTER);
+            phSmall = Ui.numbers(Ui.regular, 15 * k, L_DIM);
+            phSmall.setTextAlign(Paint.Align.RIGHT);
+            phBig = Ui.numbers(Ui.medium, 84 * k, L_INK);
+            phLine = Ui.text(Ui.medium, 26 * k, L_INK);
+            phRow = Ui.text(Ui.medium, 22 * k, L_INK);
+            phStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+            phStroke.setStyle(Paint.Style.STROKE);
+        }
+        List<Patro.Month> all = Patro.months(getContext());
+        if (all.isEmpty()) return;
+        boolean focus = zone == Z_PATRO, cursor = focus && !patroHead;
+        Patro.Month m = focus || patroMonth == null ? all.get(Math.min(patroMi, all.size() - 1)) : patroMonth;
+        int ink = tone(L_INK, WHITE), dim = tone(L_DIM, 0xADFFFFFF);
+        phTitle.setColor(ink); phLine.setColor(ink); phRow.setColor(ink); phBig.setColor(ink); phDim.setColor(dim); phSmall.setColor(dim);
+        RectF card = tmp2;
+        card.set(700 * k, 236 * k, CONTENT_R * k, 780 * k);
+        float lift = Ui.clamp(pFocus.value);
+        c.save();
+        c.scale(1 + 0.014f * lift, 1 + 0.014f * lift, card.centerX(), card.centerY());
+        shadow.setColor(Ui.alpha(0xFF000000, tone(0.10f, 0.35f) + (focus ? 0.08f : 0)));
+        shadows.draw(c, card, 30 * k, SHADOW_BLUR * k, shadow);
+        fill.setShader(null);
+        fill.setColor(tone(0xB8FFFFFF, 0x24FFFFFF));
+        c.drawRoundRect(card, 30 * k, 30 * k, fill);
+        if (focus) {
+            phStroke.setStrokeWidth(3 * k);
+            phStroke.setColor(tone(0xFFFFFFFF, 0x66FFFFFF));
+            c.drawRoundRect(card, 30 * k, 30 * k, phStroke);
+        }
+        float pad = 36 * k, gx = card.left + pad, gw = 560 * k, cw = gw / 7;
+        // Header: month name; focused, a pill with arrows (Left/Right: month, OK: today).
+        String title = Patro.MONTHS[m.month - 1] + " " + Patro.digits(m.year);
+        float ty = card.top + 74 * k;
+        if (focus && patroHead) {
+            tmp.set(gx - 14 * k, ty - 52 * k, gx + gw, ty + 46 * k);
+            fill.setColor(tone(0xFFFFFFFF, 0x33FFFFFF));
+            c.drawRoundRect(tmp, 36 * k, 36 * k, fill);
+            phDim.setTextAlign(Paint.Align.LEFT);
+            c.drawText("‹", gx + 4 * k, ty - 4 * k, phTitle);
+            c.drawText("›", gx + gw - 32 * k, ty - 4 * k, phTitle);
+            c.drawText(title, gx + 52 * k, ty - 4 * k, phTitle);
+        } else {
+            c.drawText(title, gx + 52 * k, ty - 4 * k, phTitle);
+        }
+        phDim.setTextAlign(Paint.Align.LEFT);
+        String sub = Patro.MONTHS_EN[m.month - 1] + " " + m.year + " · " + m.start.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, Locale.ENGLISH)
+                + "–" + m.date(m.length).getMonth().getDisplayName(java.time.format.TextStyle.SHORT, Locale.ENGLISH) + " " + m.date(m.length).getYear();
+        c.drawText(sub, gx + 52 * k, ty + 28 * k, phDim);
+        // Grid
+        phDim.setTextAlign(Paint.Align.CENTER);
+        for (int i = 0; i < 7; i++) {
+            phDim.setColor(i == 6 ? RED : dim);
+            c.drawText(Patro.DAYS[i], gx + cw * (i + 0.5f), card.top + 148 * k, phDim);
+        }
+        phDim.setTextAlign(Paint.Align.LEFT);
+        phDim.setColor(dim);
+        float rowH = 58 * k, top = card.top + 168 * k;
+        int col = m.start.getDayOfWeek().getValue() % 7;
+        boolean here = m == patroMonth;
+        float slide = Ui.clamp(pMonth.value);
+        boolean sliding = slide < 0.995f;
+        if (sliding) {
+            c.saveLayerAlpha(gx - 40 * k, top - 10 * k, gx + gw + 40 * k, top + rowH * 6 + 10 * k, Math.round(255 * slide));
+            c.translate((1 - slide) * 70 * k * patroDir, 0);
+        }
+        for (int d = 1; d <= m.length; d++, col++) {
+            float cx = gx + cw * (col % 7 + 0.5f), cy = top + rowH * (col / 7) + rowH / 2;
+            boolean red = col % 7 == 6 || m.holiday[d], today = here && d == patroToday;
+            tmp.set(cx - 32 * k, cy - 26 * k, cx + 32 * k, cy + 26 * k);
+            if (today) {
+                fill.setColor(tone(0xFF1C1C1E, 0xF2FFFFFF));
+                c.drawRoundRect(tmp, 18 * k, 18 * k, fill);
+            }
+            phNum.setColor(today ? tone(WHITE, 0xFF1C1C1E) : red ? RED : ink);
+            c.drawText(Patro.digits(d), cx - 4 * k, cy + 8 * k, phNum);
+            phSmall.setColor(today ? tone(0xB3FFFFFF, 0x991C1C1E) : dim);
+            c.drawText(String.valueOf(m.date(d).getDayOfMonth()), cx + 28 * k, cy + 21 * k, phSmall);
+            if (!m.fest[d].isEmpty()) {
+                fill.setColor(today ? tone(WHITE, 0xFF1C1C1E) : red ? RED : dim);
+                c.drawCircle(cx - 4 * k, cy + 19 * k, 3 * k, fill);
             }
         }
+        if (cursor) {   // glides from day to day
+            float rx = gx + cw * (pcX.value + 0.5f), ry = top + rowH * pcY.value + rowH / 2;
+            tmp.set(rx - 32 * k, ry - 26 * k, rx + 32 * k, ry + 26 * k);
+            phStroke.setStrokeWidth(4 * k);
+            phStroke.setColor(tone(0xFF0A84FF, 0xFF64A8FF));
+            c.drawRoundRect(tmp, 18 * k, 18 * k, phStroke);
+        }
+        if (sliding) c.restore();
+        // Right: the selected day and this month's festivals.
+        int sel = focus ? Math.min(patroSel, m.length) : m == patroMonth ? patroToday : 1;
+        float px = gx + gw + 56 * k, pw = card.right - pad - px;
+        c.drawText(Patro.digits(sel), px, card.top + 118 * k, phBig);
+        phDim.setColor(dim);
+        float bigW = phBig.measureText(Patro.digits(sel));
+        c.drawText(Patro.MONTHS[m.month - 1], px + bigW + 16 * k, card.top + 80 * k, phLine);
+        c.drawText(m.date(sel).format(AD), px + bigW + 16 * k, card.top + 114 * k, phDim);
+        float y = card.top + 168 * k;
+        String[] names = m.fest[sel].isEmpty() ? new String[0] : m.fest[sel].split(";");
+        if (m.holiday[sel] && names.length == 0) names = new String[] {Ui.tr("Feriado", "Holiday")};
+        for (int i = 0; i < names.length && i < 2; i++, y += 36 * k) c.drawText(fit(phLine, names[i], pw), px, y, phLine);
+        if (names.length == 0) c.drawText(Ui.tr("Sem eventos", "No events"), px, y, phDim);
+        y = Math.max(y, card.top + 240 * k) + 14 * k;
+        tmp.set(px, y - 8 * k, px + pw, y - 6 * k);
+        fill.setColor(tone(0x22000000, 0x33FFFFFF));
+        c.drawRect(tmp, fill);
+        y += 34 * k;
+        int shown = 0;
+        for (int d = 1; d <= m.length && shown < 6; d++) {
+            if (m.fest[d].isEmpty()) continue;
+            boolean on = d == sel;
+            phRow.setColor(on ? tone(0xFF0A84FF, 0xFF64A8FF) : m.holiday[d] ? RED : ink);
+            String label = Patro.digits(d) + "  " + m.fest[d].split(";")[0];
+            c.drawText(fit(phRow, label, pw), px, y, phRow);
+            y += 34 * k;
+            shown++;
+        }
+        c.restore();
+    }
+
+    private final RectF tmp2 = new RectF();
+
+    /** The text cut with an ellipsis to fit the width. */
+    private static String fit(Paint p, String text, float width) {
+        int n = p.breakText(text, true, width, null);
+        return n >= text.length() ? text : text.substring(0, Math.max(0, n - 1)) + "…";
     }
 
     private boolean moveLight(int dx, int dy) {
@@ -2851,7 +3510,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             case Z_SHELF:
                 // Up from an empty shelf too: move()'s older zones (the hero, the corner capsule) aren't drawn any more.
                 if (dy >= 0) return false;
-                if (cards.isEmpty()) {
+                if (patroOn()) {
+                    zone = Z_PATRO;
+                    patroGoToday();
+                } else if (cards.isEmpty()) {
                     zone = Z_TOP;
                     topIndex = picksOn() ? tab : 3;
                 } else {
@@ -2874,12 +3536,16 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 break;
             case Z_TOP:
                 if (dx != 0) {
-                    int next = Math.max(picksOn() ? 0 : 3, Math.min(5, topIndex + dx));
+                    int next = Math.max(picksOn() ? 0 : 3, Math.min(2 + lightButtons.size(), topIndex + dx));
                     if (next == topIndex) return true;
                     topIndex = next;
                     if (topIndex < 3) selectTab(topIndex);   // like Apple TV tabs: focusing a tab selects it
                 } else if (dy > 0) {
-                    if (cards.isEmpty()) {
+                    if (cards.isEmpty() && patroOn()) {
+                        zone = Z_PATRO;
+                        patroGoToday();
+                        patroHead = true;
+                    } else if (cards.isEmpty()) {
                         zone = Z_SHELF;
                     } else {
                         zone = Z_CARDS;
@@ -2888,6 +3554,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 } else {
                     return true;
                 }
+                break;
+            case Z_PATRO:
+                patroMove(dx, dy);
                 break;
             default:
                 return false;

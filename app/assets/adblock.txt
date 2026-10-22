@@ -1,0 +1,5 @@
+# Domains the ad filter blocks (and every subdomain of them), one per line. Add your own; # starts a comment.
+# NetTV live TV channel ads:
+ads-agg.geniustv.geniussystems.com.np
+ads.geniustv.geniussystems.com.np
+ads-lb.geniustv.geniussystems.com.np

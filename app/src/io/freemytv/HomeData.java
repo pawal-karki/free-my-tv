@@ -58,7 +58,7 @@ final class HomeData {
 
     /** BTC, ETH and SOL; in Brazilian reais also the dollar (USDT/BRL), which Binance doesn't list for most currencies. */
     static int coinCount() {
-        return Prefs.quotes() ? active().length : 0;
+        return 0;   // the drawer card is the Nepali patro now: no prices to fetch or show
     }
 
     private static volatile int[] activeCoins;
@@ -328,6 +328,11 @@ final class HomeData {
         String theme = Prefs.theme();
         if (theme.equals("dark")) return true;
         if (theme.equals("light")) return false;
+        return autoNight(now);
+    }
+
+    /** Night by the sun alone, whatever the theme setting says. */
+    boolean autoNight(long now) {
         long t = Shaders.timeOfDay(now, 0);
         long rise = Shaders.timeOfDay(weather.sunrise, 6 * 60 * 60_000L);
         long set = Shaders.timeOfDay(weather.sunset, 18 * 60 * 60_000L);

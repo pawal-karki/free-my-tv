@@ -113,6 +113,22 @@ final class Prefs {
     static boolean quotes() { return sp().getBoolean("quotes", Config.SHOW_CRYPTO); }
     static void setQuotes(boolean on) { put("quotes", on); }
 
+    /** Ad blocking through Private DNS (see AdBlock), and the DNS setting the TV had before. */
+    static boolean dnsBlock() { return sp().getBoolean("dnsBlock", false); }
+    static void setDnsBlock(boolean on) { put("dnsBlock", on); }
+    static String dnsWas() { return sp().getString("dnsWas", ""); }
+    static void setDnsWas(String v) { put("dnsWas", v); }
+
+    /** The NEPSE card in the drawer. */
+    static boolean nepse() { return sp().getBoolean("nepse", true); }
+    static void setNepse(boolean on) { put("nepse", on); }
+
+    /** NEPSE: the last data kept for the next start, and the watchlist (SYMBOL,units,buyPrice,alertAbove,alertBelow;...). */
+    static String nepseCache() { return sp().getString("nepseCache", ""); }
+    static void setNepseCache(String v) { sp().edit().putString("nepseCache", v).apply(); }
+    static String nepseWatch() { return sp().getString("nepseWatch", ""); }
+    static void setNepseWatch(String v) { put("nepseWatch", v); }
+
     static boolean coin(int i) { return sp().getBoolean("coin" + i, true); }
     static void setCoin(int i, boolean on) { put("coin" + i, on); }
 

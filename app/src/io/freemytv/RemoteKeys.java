@@ -27,12 +27,12 @@ final class RemoteKeys {
      * The key codes are the brand's own: on other brands they can be other buttons, so nothing here runs there.
      * Vestel builds TVs sold under other brands (F&U...), so BRAND varies: check the maker too.
      */
-    static final boolean TCL = is("TCL"), VESTEL = is("Vestel"), KTC = is("KTC"), SONY = is("Sony"), FORMOVIE = is("Formovie");
+    static final boolean TCL = is("TCL"), VESTEL = is("Vestel"), KTC = is("KTC"), SONY = is("Sony"), FORMOVIE = is("Formovie"), NETTV = is("NETTV");
     /** Brands whose Netflix button is STEM_1, a global key (MediaTek): only that button is ours. */
     static final boolean STEM_NETFLIX = VESTEL || FORMOVIE;
 
     static boolean supported() {
-        return TCL || STEM_NETFLIX || KTC || SONY;
+        return TCL || STEM_NETFLIX || KTC || SONY || NETTV;
     }
 
     private static boolean is(String maker) {
@@ -42,6 +42,13 @@ final class RemoteKeys {
     /** Opens the app for this key on its first press. True if the key is ours and in use (it is then consumed). */
     static boolean onKey(Context c, KeyEvent e) {
         if (!supported()) return false;
+        // NetTV's own launcher takes the screen back whatever the default home is: Home goes to us.
+        if (NETTV && e.getKeyCode() == KeyEvent.KEYCODE_HOME) {
+            if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
+                c.startActivity(new Intent(c, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            }
+            return true;
+        }
         // BUTTON_3 is also a game controller's button: keys from a gamepad or a joystick are left alone.
         int source = e.getSource();
         if ((source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD

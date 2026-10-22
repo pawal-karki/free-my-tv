@@ -1,0 +1,294 @@
+M 2083 1 2026-04-14 31
+1|H|Nepali New Year 2083 BS;Bhaktapur Biswadhojpatan (Biskajatra)
+2|-|Siruwa Pawani Parba (Siruwa Parba Manaune Jhapa;Morang
+3|-|Bhaktapur Bramhayani Yatra;Matati Cha:Hre Puja
+4|-|Matatirtha Aaunshi;Aama ko Mukh Herne
+5|H|Lalitpur Machhindranath Ratharohan
+6|-|Parashu Ram Jayanti
+7|-|Akshyaya Tritiya;Shiva Parbati Bibah
+8|-|Lalitpur Rato Machindranath Rath Yatra Aarambha;Chhanda Diwas
+9|-|Adhyaguru Shankaracharya Jayanti
+11|-|Loktantra Diwas
+12|H|Sita Jayanti
+13|-|Rastriya Photo Patrakarita Diwas
+14|-|Mohini Ekadashi
+17|-|Narshinha Jayanti;Syangja Lasargha Alamdevi Puja
+18|H|Gautam Buddha Jayanti;Swanya Punhi:
+19|H|
+20|-|Rastriya Suchana tatha Sanchar Prawidhi Diwas
+22|-|Mangal Chauthi Brat
+24|-|Kirant Samaj Sudhar Diwas
+26|H|Aastami Brat;Gorakhkali Puja
+30|-|Apara Ekadashi
+M 2083 2 2026-05-15 31
+1|-|Sithi: Cha:Hre
+2|H|Shani Jayanti
+3|-|Adhikmas Aarambha;Matsyanarayan Mela Aarambha
+9|H|
+10|-|Astami Brat;Gorakhkali Puja
+12|-|Gosaikunda Snan Samapti;Baitadi Bishwanath Mandirma Ganga Dashahara Snan Mela
+13|-|Padmini Ekadashi
+14|H|Pradosh Brat;Eid-Ul-Ajha
+15|H|Ganatantra Diwas
+16|H|Purnima Brat
+17|-|Anala Punhi
+21|-|Jatiya Bhedbhav tatha Chuwachut Unmulan Rastriya Diwas
+23|H|
+24|-|Rabi Saptami
+25|-|Aastami Brat;Gorakhkali Puja
+28|-|Parama Ekadashi
+29|-|Pradosh Brat
+30|H|Anala Cha: Hre
+M 2083 3 2026-06-15 32
+1|-|Adhikmas Samapti;Matsyanarayan Mela Samapti
+6|H|Kumar Shasthi;Sithi: Nakha
+7|-|Rabi Saptami;Kumar Yatra
+8|-|Bayu Astami;Gorakhkali Puja
+11|-|Nirjala Ekadashi;Tulashi ko Dal Rakhne
+13|H|
+15|-|Masta Purnima (Jya: Punhi:);Panauti Snan
+20|H|
+23|-|Aastami Brat;Gorakhkali Puja
+24|-|Bhal Bhal Astami;Deupatan ma Trishul Jatra
+26|-|Smarta haru ko Yogini Ekadashi
+27|H|Baishnab haruko Yogini Ekadashi Brat;World Population Day
+29|-|Dilacha:Hre:;Bhanu Jayanti
+30|-|Darsha Shradda
+32|-|Jagannath Rathyatra
+M 2083 4 2026-07-17 31
+1|-|Saune Sankranti;Luto Falne Ebam Ranko balne
+2|H|
+6|-|Astami Brat
+9|H|Harisayani Ekadashi;Tulashi Ropne
+13|-|Guru Purnima;Purnima Brat
+15|-|Khir Khane Din
+16|H|
+20|-|Astami Brat
+23|H|
+24|-|Kamika Ekadashi
+26|-|Ghantakarna Chaturdashi;Gathamug Cha:Hre:
+28|-|Guunla Dharma Aarambha
+29|-|Chandrodaya
+30|H|Baraha Jayanti
+M 2083 5 2026-08-17 31
+1|-|Naag Panchami;Naag Tasne
+2|-|Kalki Jayanti
+3|-|Goswasmi Tulashi Das Jayanti;Rastriya Suchana Diwas
+4|-|Astami Brat;Yal Panchadaan
+6|H|
+7|-|Putrada Ekadashi
+11|-|Purnima Brat;Bajura Badimalika Mela
+12|H|Janai Purnima;Rishi Tarpani
+13|H|Gai Jatra (Saparu) (Holiday only for Kathmandu Valley and all Newars outside Ktm)
+14|-|Ropain Jatra;yal Matya
+16|-|Mangal Chauthi;Lalitpur Narsimha Yatra
+19|H|Shree Krishna Janmasthami;Gaura Parba
+20|H|Manab Bechbikhan Biruddako Rastriya Diwas
+22|-|Ajaa Ekadashi;Nijamati Sewa Diwas
+23|-|Swayambhu ko Chayan Darshan;Gen Z Sahid Diwas
+24|-|Yen Panchadaan;Jug: Chahre: Puja
+26|-|Kushe Aaunshi;Buba ko Mukh Herne
+27|H|Gunla Dharma Samapti
+28|-|Dar Khane Din
+29|-|Haritalika Brat;Teej (Holiday for Women only)
+30|-|Rishi Panchami Brat;Mangal Chaturthi Brat
+31|-|Biruda Panchami
+M 2083 6 2026-09-17 31
+1|-|Bishwokarma Puja;Bastu Diwas
+3|H|Sambidhan Diwas (Rastriya Diwas);Kaya Astami
+6|-|Haripariwartini Ekadashi
+7|-|Indradhwajothan;Baman Dwadashi
+9|-|Kumari Indra Jatra (Holiday in Ktm Only);अनन्त चतुर्दशी
+10|H|Yanya Punhi:;Chepang Chonam Parba
+11|-|Sohra Shradda Aarambha;Pratipada Shrada
+12|-|Dwitiya Shradda
+13|-|Tritiya Shradda
+14|-|Chaturthi Shradda;Indra Dhwajpatan
+15|-|Panchami tatha Shasthi Shradda;National Cinema Day
+16|-|Saptami Shradda
+17|H|Astami Brat;Astami Shradda
+18|-|Jitiya Parba;(Holiday for women who celebrates Jitiya Parba)
+19|-|Dashami Shradda
+20|-|Indira Ekadashi;Ekadashi Shradda
+21|-|Dwadashi Shradda
+22|-|Trayodashi Shradda;Jumla Khalangama Chandannath ko Lingo Thadyaune
+23|-|Chaturdashi Shradda;Na:Laswan Cha: Hre
+24|H|Aaunshi Shradda;Darsha Shrada
+25|H|Ghatasthapana;Nawaratra Aarambha
+29|-|Pachali Bairab Yatra
+31|H|Phulpati;Nawapatrika Prabesh
+M 2083 7 2026-10-18 30
+1|H|Mahaastami;Kaal Ratri
+2|H|Janabaha: Kuchhi Bhwaya
+3|H|Maha Nawami;Syakwa: Tyakwa:
+4|H|Bijaya Dashami;Dashain ko Tika
+5|H|Papangkusha Ekadashi;Annapurna Yatra
+6|H|
+7|H|
+8|-|Kojagrat Brata;Purnima Brata
+9|-|Kartik Snan;Aakash Dip Daan Aarambha
+14|H|
+15|-|Rabi Saptami
+16|-|Astami Brat;Gorakhkali Puja
+19|-|Rama Ekadashi
+20|-|Dhanteras;Yamadip Daan
+21|H|Kaag Tihar;Dhanwantari Jayanti
+22|H|Kukur Tihar;Narak Chaturdashi
+23|H|Gai Puja
+24|H|Swa:nti Paru;Goru Puja
+25|H|Bhaitika;Kija Puja
+26|H|
+28|H|
+29|H|Chhath Parba;Dala Puja
+M 2083 8 2026-11-17 29
+1|-|Astami Brat;Gorakhkali Puja
+2|-|Kusmanda Nawami
+3|-|Balambu Mahalaxmi Yatra
+4|-|Haribodhini Ekadashi;Tulashi Bibah
+5|H|Changunarayan Akhandadip Darshan
+7|-|Baikuntha Chaturdashi
+8|-|Gurunanak Jayanti (Holiday For Sikh Religion);Chaturmas Brat Samapti
+12|H|
+15|-|Bhairawastami
+17|-|World Disability Day (Holiday only for disabled employees);Shree Guheshwori Yatr
+18|-|Utpattika Ekadashi
+19|H|
+20|-|Pashupatinath Mela
+21|-|Bala Chaturdashi;Shatbij Charne
+24|-|World Human Rights Day
+26|H|
+28|-|Bibah Panchami;Janakpur ma Sita Bibah Panchami Mela
+M 2083 9 2026-12-16 30
+2|-|Aastami Brat;Gorakhkali Puja
+4|H|
+5|-|Mokshyada Ekadashi
+8|-|Purnima Brat
+9|H|Yomari Punhi:;Thinla Punhi:
+10|H|Christmas Day
+11|H|
+15|H|Tamu Lhochar
+16|-|Astami Brat;Gorakhkali Puja
+17|-|2027 AD Starts
+18|H|
+19|-|Saphala Ekadashi
+21|-|Guru Gobinda Sinha Jayanti
+22|-|Dishi Charhe
+23|-|Araniko Smriti Diwas
+24|-|Tol Lhosar;Nepal Jyotish Parishad Sthapana Diwas
+25|H|
+27|-|Prithvi Jayanti;Rastriya Ekata Diwas
+28|-|Mangal Chauthi
+M 2083 10 2027-01-15 29
+1|H|Maghe Sankranti;Maghi Parba
+2|H|Astami Brat;Seto Machindranath Snan
+4|-|Smarta haruko Putrada Ekadashi
+5|-|Baishnab haruko Putrada Ekadashi
+8|-|Shree Swasthani Brat Aarambha;Mila Punhi:
+9|H|
+12|-|Mangal Chauthi
+15|-|Astami Brat;Gorakhkali Puja
+16|H|Shahid Diwas
+19|-|Shatila Ekadashi
+22|-|Lainchahre:
+23|H|Pashupati Kshetrama Madhav Narayan Mela;Triveni Mela
+24|H|Sonam Lhosar;Tamang Lhochar
+28|-|Basanta Panchami;Basanta Shrawan
+M 2083 11 2027-02-13 30
+1|H|World Radio Day;Achala Saptami
+2|-|Astami Brat;Bhimastami
+5|-|Bhima Ekadashi
+6|-|Changu ma Madhav Narayan Mela
+7|H|Rastriya Prajatantra Diwas;Nirwachan Diwas
+8|H|Shree Swasthani Brat Samapti;Si Punhi:
+15|H|
+16|-|Astami Brat;Gorakhkali Puja
+18|-|Majhi Samudayako Ladi Puja
+20|-|Bijaya Ekadashi
+22|H|Maha Shiva Ratri;Sila Chahre: Nepali Sena Diwas
+24|H|International Womens Day
+25|H|Gyalpo Lhosar
+29|H|
+M 2083 12 2027-03-15 30
+2|-|Bhaumastami Brat;Chirotthan
+4|-|Aamalaki Ekadashi
+6|H|
+7|-|Holi;Chirdaha
+8|-|Falgu Purnima (Holi Punhi:);Terai Holi (Holiday in 21 districts of Terai )
+9|-|Nala Machindranath Snan (Nala Nwahn)
+10|-|World Leprosy Day
+11|-|Nala Machindranath Rathyatra
+13|H|
+16|-|Shitalastami;Gorakhkali Puja
+19|-|Paap Mochini Ekadashi
+20|H|
+22|-|Pahan (Pasa) Charhe:
+23|-|Ghode Jatra (Holiday in Ktm. Only)
+24|-|Chovar Adinath Snan (Chobhadhya: Nwahn)
+26|-|Matsenarayan Mela;Matsejayanti
+27|H|
+29|-|Chaiti Chhath
+30|-|Bhaktapur Biswadhojwothan
+M 2084 1 2027-04-14 31
+4|H|
+11|H|
+18|H|
+25|H|
+M 2084 2 2027-05-15 31
+1|H|
+8|H|
+15|H|
+22|H|
+29|H|
+M 2084 3 2027-06-15 32
+5|H|
+12|H|
+19|H|
+26|H|
+M 2084 4 2027-07-17 31
+1|H|
+8|H|
+15|H|
+22|H|
+29|H|
+M 2084 5 2027-08-17 31
+5|H|
+12|H|
+19|H|
+26|H|
+M 2084 6 2027-09-17 30
+2|H|
+9|H|
+16|H|
+23|H|
+30|H|
+M 2084 7 2027-10-17 30
+7|H|
+14|H|
+21|H|
+28|H|
+M 2084 8 2027-11-16 30
+5|H|
+12|H|
+19|H|
+26|H|
+M 2084 9 2027-12-16 29
+3|H|
+10|H|
+17|H|
+24|H|
+M 2084 10 2028-01-14 30
+2|H|
+9|H|
+16|H|
+23|H|
+30|H|
+M 2084 11 2028-02-13 30
+7|H|
+14|H|
+21|H|
+28|H|
+M 2084 12 2028-03-14 30
+5|H|
+12|H|
+19|H|
+26|H|

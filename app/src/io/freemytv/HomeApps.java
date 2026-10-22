@@ -57,6 +57,8 @@ final class HomeApps {
     static final int APP = 0, LIVE_TV = 1, INPUT = 2, ALL_APPS = 3, SETTINGS = 4, ANDROID_SETTINGS = 5;
     /** The "HDMI Inputs" button: opens the bottom drawer on the inputs (the home screen handles it). */
     static final int INPUTS = 7;
+    /** Corner buttons: light/dark toggle (the home screen handles it) and the TV's Wi-Fi settings. */
+    static final int THEME = 8, WIFI = 9;
     /** Image size of each card (16:9; on screen it shows up to ~330 px wide). */
     static final int TILE_W = 384, TILE_H = 216;
 
@@ -389,6 +391,9 @@ final class HomeApps {
                 break;
             case ANDROID_SETTINGS:
                 intent = new Intent(Settings.ACTION_SETTINGS);
+                break;
+            case WIFI:
+                intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
                 break;
             default:
                 return false;
@@ -774,6 +779,8 @@ final class HomeApps {
         String cacheKey = key != null ? key : pkg;
         if (TILES.containsKey(cacheKey)) return TILES.get(cacheKey);
         Bitmap logo = key == null ? null : ownLogo(c, key);
+        // NetTV's Live TV banner and icon are only the words "Live TV": a TV symbol says more.
+        if (key == null && "np.com.geniussystems.android.atv.livetv".equals(pkg)) return liveTvTile(c);
         Bitmap tile = logo != null ? logoTile(logo, brand) : bannerTile(c, pkg);
         if (tile == null) tile = iconTile(c, pkg);
         tile.setHasMipMap(true);
@@ -844,6 +851,19 @@ final class HomeApps {
             icon.setBounds((TILE_W - s) / 2, (TILE_H - s) / 2, (TILE_W + s) / 2, (TILE_H + s) / 2);
             icon.draw(canvas);
         }
+        return b;
+    }
+
+    /** A big TV symbol on a blue-to-purple card (NetTV's own art is only the words "Live TV"). */
+    private static Bitmap liveTvTile(Context c) {
+        Bitmap b = Bitmap.createBitmap(TILE_W, TILE_H, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(b);
+        android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        p.setShader(new android.graphics.LinearGradient(0, 0, TILE_W, TILE_H, 0xFF1E6BFF, 0xFF7B2FF7, android.graphics.Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 0, TILE_W, TILE_H, p);
+        Symbols.draw(c, canvas, "live_tv", TILE_W / 2f, TILE_H / 2f, TILE_H * 0.6f, 0xFFFFFFFF);
+        b.setHasMipMap(true);
+        TILES.put("nettv-live", b);
         return b;
     }
 
