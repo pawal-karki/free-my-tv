@@ -337,7 +337,7 @@ final class HomeApps {
         Set<String> skip = new HashSet<>();
         // A built-in app is skipped only while it is on the shelf: one the person took off must still be listed here.
         List<String> onShelf = shelfPackages(c);
-        for (String[] d : SHELF) if (onShelf.contains(d[2])) skip.add(d[2]);
+        skip.addAll(onShelf);   // an app is on the shelf or in the rows under it, never both
         skip.addAll(java.util.Arrays.asList(LIVE_TV_APPS));
         skip.add(c.getPackageName());
         skip.addAll(HIDDEN);
@@ -352,6 +352,8 @@ final class HomeApps {
             it.key = pkg;
             it.label = app[1];
             it.tile = appTile(c, null, pkg, 0);
+            Bitmap art = customArt(c, pkg, TILE_W, TILE_H, false);   // NetTV's own apps: drawn art, their icons are only words
+            if (art != null) it.tile = art;
             items.add(it);
         }
         Collections.sort(items, (a, b) -> a.label.toLowerCase(Locale.ROOT).compareTo(b.label.toLowerCase(Locale.ROOT)));
@@ -864,6 +866,45 @@ final class HomeApps {
         Symbols.draw(c, canvas, "live_tv", TILE_W / 2f, TILE_H / 2f, TILE_H * 0.6f, 0xFFFFFFFF);
         b.setHasMipMap(true);
         TILES.put("nettv-live", b);
+        return b;
+    }
+
+    /**
+     * NetTV's own apps ship icons that are only words or blank, so they get one drawn here: a color gradient with a
+     * symbol, in the same rounded square as the rest. Null for every other app.
+     */
+    /** The same drawn art as a card of any size (the app rows use the shelf's 16:9 tiles); `round` clips the squircle. */
+    static Bitmap customArt(Context c, String pkg, int pw, int ph, boolean round) {
+        int from, to;
+        String symbol;
+        switch (pkg) {
+            case "np.com.geniussystems.android.atv.livetv": from = 0xFF1E6BFF; to = 0xFF7B2FF7; symbol = "live_tv"; break;
+            case "np.com.geniussystems.android.atv.movies": from = 0xFFFF7A45; to = 0xFFE5334B; symbol = "play"; break;
+            case "np.com.geniussystems.android.atv.tvshows": from = 0xFF14C8B4; to = 0xFF0A74B8; symbol = "tv"; break;
+            case "np.com.geniussystems.android.atv.myaccount": from = 0xFF9B5DE5; to = 0xFF4361EE; symbol = null; break;
+            case "np.com.geniussystems.android.atv.launcher": from = 0xFF3A4660; to = 0xFF151B2B; symbol = "home"; break;
+            default: return null;
+        }
+        int px = Math.min(pw, ph);
+        Bitmap b = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(b);
+        if (round) {
+            Path clip = new Path();
+            clip.addRoundRect(new RectF(0, 0, pw, ph), px * 0.2237f, px * 0.2237f, Path.Direction.CW);
+            canvas.clipPath(clip);
+        }
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setShader(new LinearGradient(0, 0, pw, ph, from, to, Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 0, pw, ph, p);
+        p.setShader(null);
+        if (symbol != null) {
+            Symbols.draw(c, canvas, symbol, pw / 2f, ph / 2f, px * 0.46f, 0xFFFFFFFF);
+        } else {   // a person: head and shoulders
+            p.setColor(0xFFFFFFFF);
+            float cx = pw / 2f;
+            canvas.drawCircle(cx, ph * 0.36f, px * 0.15f, p);
+            canvas.drawRoundRect(new RectF(cx - px * 0.26f, ph * 0.56f, cx + px * 0.26f, ph * 0.88f), px * 0.26f, px * 0.26f, p);
+        }
         return b;
     }
 
