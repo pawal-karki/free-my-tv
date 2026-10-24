@@ -1,6 +1,10 @@
 package io.freemytv;
 
 import android.app.Activity;
+import android.app.job.JobInfo;
+import android.app.job.JobScheduler;
+import android.content.ComponentName;
+import android.os.PersistableBundle;
 import android.content.Context;
 import android.content.Intent;
 import android.net.VpnService;
@@ -22,6 +26,7 @@ final class AdBlock {
     /** The switch changed in settings. On: ask for the VPN approval if needed, then start. */
     static void request(Activity a, boolean on) {
         if (!on) {
+            stopWatchdog(a);
             AdVpn.stop(a);
             HomeMode.notice(a, Ui.tr("Bloqueio de anúncios desligado.", "Ad blocking is off."));
             return;
@@ -46,11 +51,34 @@ final class AdBlock {
 
     /** After a reboot: back on if it was on and the approval is already given (a dialog can't open from here). */
     static void resume(Context c) {
-        if (Prefs.dnsBlock() && VpnService.prepare(c) == null) AdVpn.start(c);
+        if (!Prefs.dnsBlock()) return;
+        keepAlive(c);
+        if (!AdVpn.on && VpnService.prepare(c) == null) AdVpn.start(c);
+    }
+
+    private static final int WATCHDOG = 2999;
+
+    /**
+     * A job every 15 minutes (kept across restarts) that starts the filter if it is down: it runs whichever home screen
+     * is in use, even Original, and whatever else is on screen.
+     */
+    static void keepAlive(Context c) {
+        JobScheduler js = c.getSystemService(JobScheduler.class);
+        if (js == null || js.getPendingJob(WATCHDOG) != null) return;
+        PersistableBundle extras = new PersistableBundle();
+        extras.putString("action", ModeJob.ADBLOCK);
+        js.schedule(new JobInfo.Builder(WATCHDOG, new ComponentName(c, ModeJob.class)).setExtras(extras)
+                .setPeriodic(15 * 60_000L).setPersisted(true).build());
+    }
+
+    private static void stopWatchdog(Context c) {
+        JobScheduler js = c.getSystemService(JobScheduler.class);
+        if (js != null) js.cancel(WATCHDOG);
     }
 
     private static void begin(Context c) {
         Context app = c.getApplicationContext();
+        keepAlive(app);
         new Thread(() -> {
             freePrivateDns(app);
             AdVpn.start(app);

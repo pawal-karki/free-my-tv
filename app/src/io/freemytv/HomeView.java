@@ -413,6 +413,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         resumedAt = SystemClock.uptimeMillis();
         lastNanos = 0;
         lastStep = 0;
+        AdBlock.resume(getContext());   // the filter stops with an update or a restart: it comes back with the home screen
         data.addListener(this);
         recs.addListener(this);
         data.refreshIfStale();
@@ -2646,12 +2647,15 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             appRect(appIndex, appBox);
             appBox.offset(0, -homeScroll.value);
             menuAnchor.set(appBox);
+            menuAnchor.inset(-appBox.width() * 0.07f, -appBox.height() * 0.07f);   // the focused card is drawn this much bigger
+            menuAnchor.offset(0, -4 * k);
             if (HomeApps.shelfPackages(getContext()).size() < HomeApps.MAX_SHELF && !HomeApps.shelfPackages(getContext()).contains(it.pkg)) {
                 names.add(Ui.tr("Pôr na prateleira", "Add to shelf"));
                 actions.add(() -> addToShelf(it.pkg));
             }
         } else {
             menuAnchor.set(tileRects[shelfIndex]);
+            menuAnchor.inset(-tileRects[shelfIndex].width() * FOCUS_GROW / 2, -tileRects[shelfIndex].height() * FOCUS_GROW / 2);   // grown with focus
             if (shelf.size() >= 2) {
                 names.add(Ui.tr("Mover", "Move"));
                 actions.add(this::startReorder);
@@ -2688,7 +2692,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private Paint appName;
     private final RectF appBox = new RectF();
     private Paint menuText;
-    private final Path menuTail = new Path();
+    private final Path menuTail = new Path(), menuHole = new Path();
 
     private void closeMenu() {
         menuOpen = false;
@@ -2734,14 +2738,19 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         RectF tile = menuAnchor;
         fill.setShader(null);
         c.save();
-        c.clipOutRect(tile);   // the app stays bright
+        menuHole.reset();
+        float hole = TILE_RADIUS * k * 1.16f;
+        menuHole.addRoundRect(tile, hole, hole, Path.Direction.CW);
+        c.clipOutPath(menuHole);   // the app stays bright, in its own rounded shape
         fill.setColor(Ui.alpha(0xFF000000, 0.4f * v));
         c.drawRect(screen, fill);
         c.restore();
         int n = menuNames.size();
         float w = 360 * k, rowH = 66 * k, pad = 12 * k, h = n * rowH + 2 * pad;
-        float x = Math.max(40 * k, Math.min(this.w - 40 * k - w, tile.centerX() - w / 2)), y = tile.top - h - 34 * k;
-        float pivotX = tile.centerX(), pivotY = y + h + 34 * k;
+        boolean below = tile.top < this.h * 0.45f;   // an app near the top gets the menu under it (and under its name)
+        float x = Math.max(40 * k, Math.min(this.w - 40 * k - w, tile.centerX() - w / 2));
+        float y = below ? tile.bottom + 70 * k : tile.top - h - 34 * k;
+        float pivotX = tile.centerX(), pivotY = below ? y - 20 * k : y + h + 34 * k;
         c.save();
         float sc = 0.9f + 0.1f * v;
         c.scale(sc, sc, pivotX, pivotY);
@@ -2752,9 +2761,15 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         c.drawRoundRect(tmp, 28 * k, 28 * k, fill);
         menuTail.reset();
         float tx = Math.max(x + 40 * k, Math.min(x + w - 40 * k, tile.centerX()));
-        menuTail.moveTo(tx - 16 * k, y + h - 1);
-        menuTail.lineTo(tx + 16 * k, y + h - 1);
-        menuTail.lineTo(tx, y + h + 16 * k);
+        if (below) {
+            menuTail.moveTo(tx - 16 * k, y + 1);
+            menuTail.lineTo(tx + 16 * k, y + 1);
+            menuTail.lineTo(tx, y - 16 * k);
+        } else {
+            menuTail.moveTo(tx - 16 * k, y + h - 1);
+            menuTail.lineTo(tx + 16 * k, y + h - 1);
+            menuTail.lineTo(tx, y + h + 16 * k);
+        }
         menuTail.close();
         c.drawPath(menuTail, fill);
         for (int i = 0; i < n; i++) {

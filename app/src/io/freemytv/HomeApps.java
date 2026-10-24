@@ -352,13 +352,13 @@ final class HomeApps {
             it.key = pkg;
             it.label = app[1];
             it.tile = appTile(c, null, pkg, 0);
-            Bitmap art = customArt(c, pkg, TILE_W, TILE_H, false);   // NetTV's own apps: drawn art, their icons are only words
+            Bitmap art = customTile(c, pkg);   // NetTV's own apps: drawn art, their icons are only words
             if (art != null) it.tile = art;
             items.add(it);
         }
         Collections.sort(items, (a, b) -> a.label.toLowerCase(Locale.ROOT).compareTo(b.label.toLowerCase(Locale.ROOT)));
         synchronized (HomeApps.class) {
-            TILES.keySet().removeIf(k -> k.contains(".") && !seen.contains(k));
+            TILES.keySet().removeIf(k -> k.contains(".") && !k.startsWith("custom:") && !seen.contains(k));
         }
         items.add(special(c, SETTINGS, "freemytv-settings", "Free My TV", "sparkles"));
         return items;
@@ -426,6 +426,9 @@ final class HomeApps {
         PackageManager pm = c.getPackageManager();
         // MediaTek OneWorld TV Center (KTC/NextStar) has one input per tuner mode (antenna, cable, satellite): tuning one
         // switches the TV to that mode and hides the other channel lists, so it opens as it is, on its own last channel.
+        // NetTV (Nepal): its own Live TV app is the way to its channels (the TV has no tuner channel list to open).
+        Intent netTv = launchIntent(pm, "np.com.geniussystems.android.atv.livetv");
+        if (netTv != null) return netTv;
         Intent oneWorld = launchIntent(pm, "com.mediatek.tv.oneworld.tvcenter");
         if (oneWorld != null) return oneWorld;
         String tuner = tunerInput(c);
@@ -783,10 +786,37 @@ final class HomeApps {
         Bitmap logo = key == null ? null : ownLogo(c, key);
         // NetTV's Live TV banner and icon are only the words "Live TV": a TV symbol says more.
         if (key == null && "np.com.geniussystems.android.atv.livetv".equals(pkg)) return liveTvTile(c);
-        Bitmap tile = logo != null ? logoTile(logo, brand) : bannerTile(c, pkg);
-        if (tile == null) tile = iconTile(c, pkg);
+        Bitmap tile = logo != null ? logoTile(logo, brand) : diskTile(c, pkg);
         tile.setHasMipMap(true);
         TILES.put(cacheKey, tile);
+        return tile;
+    }
+
+    /**
+     * An app's card from the disk cache (one PNG per app and version), or made and saved. Making it opens the app's
+     * resources, which is slow on a TV with little memory; reading the PNG is not, and it is what a cold start does.
+     */
+    private static Bitmap diskTile(Context c, String pkg) {
+        java.io.File file = null;
+        try {
+            long updated = c.getPackageManager().getPackageInfo(pkg, 0).lastUpdateTime;
+            java.io.File dir = new java.io.File(c.getCacheDir(), "tiles");
+            file = new java.io.File(dir, pkg + "-" + updated + ".png");
+            if (file.exists()) {
+                Bitmap cached = BitmapFactory.decodeFile(file.getPath());
+                if (cached != null) return cached;
+            }
+            dir.mkdirs();
+        } catch (PackageManager.NameNotFoundException | RuntimeException ignored) {
+        }
+        Bitmap tile = bannerTile(c, pkg);
+        if (tile == null) tile = iconTile(c, pkg);
+        if (file != null) {
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(file)) {
+                tile.compress(Bitmap.CompressFormat.PNG, 100, out);
+            } catch (java.io.IOException ignored) {
+            }
+        }
         return tile;
     }
 
@@ -873,6 +903,14 @@ final class HomeApps {
      * NetTV's own apps ship icons that are only words or blank, so they get one drawn here: a color gradient with a
      * symbol, in the same rounded square as the rest. Null for every other app.
      */
+    private static synchronized Bitmap customTile(Context c, String pkg) {
+        String key = "custom:" + pkg;
+        if (TILES.containsKey(key)) return TILES.get(key);
+        Bitmap art = customArt(c, pkg, TILE_W, TILE_H, false);
+        TILES.put(key, art);
+        return art;
+    }
+
     /** The same drawn art as a card of any size (the app rows use the shelf's 16:9 tiles); `round` clips the squircle. */
     static Bitmap customArt(Context c, String pkg, int pw, int ph, boolean round) {
         int from, to;

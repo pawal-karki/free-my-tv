@@ -3,3 +3,5 @@
 ads-agg.geniustv.geniussystems.com.np
 ads.geniustv.geniussystems.com.np
 ads-lb.geniustv.geniussystems.com.np
+# NetTV launcher promo banners (Omoda Jaecoo, NPL, bank offers):
+molecules.geniustv.geniussystems.com.np

@@ -29,6 +29,8 @@ public class AdVpn extends VpnService {
     private static final String[] UPSTREAM = {"94.140.14.14", "1.1.1.1"};
     static final String STOP = "io.freemytv.ADVPN_STOP";
 
+    /** True while the filter is up in this process: the home screen starts it again if the TV or an update stopped it. */
+    static volatile boolean on;
     private volatile boolean running;
     private ParcelFileDescriptor tun;
     private Thread loop;
@@ -38,7 +40,7 @@ public class AdVpn extends VpnService {
 
     /** Starts the filter (the system's VPN approval must have been given: see AdBlock.request). */
     static void start(Context c) {
-        c.startService(new Intent(c, AdVpn.class));
+        c.startForegroundService(new Intent(c, AdVpn.class));   // a foreground service: it may start from the background and the system keeps it
     }
 
     static void stop(Context c) {
@@ -51,8 +53,22 @@ public class AdVpn extends VpnService {
             stopSelf();
             return START_NOT_STICKY;
         }
+        foreground();   // must follow startForegroundService within seconds, whether or not the VPN can start
         if (!running) begin();
+        if (!running) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         return START_STICKY;
+    }
+
+    /** The small \"ad filter is on\" notice that keeps the service alive (it is quiet: no sound, lowest priority). */
+    private void foreground() {
+        android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
+        nm.createNotificationChannel(new android.app.NotificationChannel("adfilter", "Ad filter", android.app.NotificationManager.IMPORTANCE_MIN));
+        android.app.Notification n = new android.app.Notification.Builder(this, "adfilter").setSmallIcon(android.R.drawable.ic_lock_lock)
+                .setContentTitle(Ui.tr("Bloqueio de anúncios ligado", "Ad blocking is on")).setOngoing(true).build();
+        startForeground(7, n);
     }
 
     private void begin() {
@@ -66,6 +82,7 @@ public class AdVpn extends VpnService {
         }
         if (tun == null) return;   // no approval: the dialog has to be accepted first
         running = true;
+        on = true;
         loop = new Thread(this::run, "adfilter");
         loop.start();
         AppLog.w("ad filter on (" + blocked.size() + " names)");
@@ -208,6 +225,7 @@ public class AdVpn extends VpnService {
 
     private void shutdown() {
         running = false;
+        on = false;
         try {
             if (tun != null) tun.close();
         } catch (IOException ignored) {
